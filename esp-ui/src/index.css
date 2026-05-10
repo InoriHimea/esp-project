@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* ── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  --c-bg:        #0a0b0e;
+  --c-surface:   #12151c;
+  --c-panel:     #1a1e28;
+  --c-border:    #252a38;
+  --c-border-hi: #3a4055;
+
+  --c-accent:    #00e5ff;
+  --c-accent-dim:#005f6b;
+  --c-fwd:       #00e5ff;
+  --c-rev:       #ff6b6b;
+  --c-warn:      #ffb347;
+  --c-ok:        #4ade80;
+
+  --c-text:      #e4e8f0;
+  --c-muted:     #6b7394;
+  --c-hint:      #3d4460;
+
+  --glow-accent: 0 0 20px rgba(0,229,255,0.25), 0 0 60px rgba(0,229,255,0.08);
+  --glow-rev:    0 0 20px rgba(255,107,107,0.25), 0 0 60px rgba(255,107,107,0.08);
+  --glow-warn:   0 0 20px rgba(255,179,71,0.3);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0; padding: 0;
+  width: 100%; min-height: 100vh;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-border-hi); border-radius: 2px; }
+
+/* ── Glow pulse animation ──────────────────────────────────────────────── */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: var(--glow-accent); }
+  50%       { box-shadow: 0 0 40px rgba(0,229,255,0.45), 0 0 80px rgba(0,229,255,0.15); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes spin-slow-rev {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+@keyframes value-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+.animate-spin-fwd   { animation: spin-slow 1s linear infinite; }
+.animate-spin-rev   { animation: spin-slow-rev 1s linear infinite; }
+.animate-blink      { animation: blink-dot 1.2s ease-in-out infinite; }
+.animate-value-pop  { animation: value-pop 0.25s ease-out; }

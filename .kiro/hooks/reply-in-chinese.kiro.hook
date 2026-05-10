@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "回覆使用中文",
+  "description": "在每次提交訊息時提醒 Kiro 使用中文回覆",
+  "version": "1",
+  "when": {
+    "type": "promptSubmit"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "請務必使用繁體中文回覆用戶的所有問題和請求。無論用戶使用什麼語言提問，你的回覆都必須是繁體中文。"
+  }
+}

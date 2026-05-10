@@ -1,0 +1,25 @@
+networks:
+  unraid_macvlan:
+    external: true
+    name: ${MACVLAN_NETWORK}
+
+services:
+  esp-server:
+    build: ../esp-server
+    restart: unless-stopped
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${ESP_SERVER_IP}
+    env_file: .env
+
+  esp-ui:
+    build:
+      context: ../esp-ui
+      args:
+        VITE_SERVER_API: http://${ESP_SERVER_IP}:3000/api/v1
+        VITE_SERVER_WS: ws://${ESP_SERVER_IP}:3000/ws
+    restart: unless-stopped
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${ESP_UI_IP}
+    depends_on: [esp-server]
