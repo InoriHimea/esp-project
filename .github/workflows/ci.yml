@@ -1,0 +1,163 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        working-directory: ./go-services
+        run: go mod download
+
+      - name: Verify dependencies
+        working-directory: ./go-services
+        run: go mod verify
+
+      - name: Run go vet
+        working-directory: ./go-services
+        run: go vet ./...
+
+      - name: Run tests
+        working-directory: ./go-services
+        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./go-services/coverage.txt
+          flags: unittests
+          name: codecov-umbrella
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: test
+    
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        working-directory: ./go-services
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          echo "Building for $GOOS/$GOARCH..."
+          go build -v -ldflags="-s -w" ./api-gateway
+          go build -v -ldflags="-s -w" ./auth-service
+          go build -v -ldflags="-s -w" ./device-service
+          go build -v -ldflags="-s -w" ./mqtt-service
+          go build -v -ldflags="-s -w" ./websocket-service
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          working-directory: ./go-services
+          args: --timeout=5m
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-services
+          file: ./go-services/Dockerfile.api-gateway
+          push: false
+          tags: esp-api-gateway:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Auth Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-services
+          file: ./go-services/Dockerfile.auth-service
+          push: false
+          tags: esp-auth-service:test
+
+      - name: Build Device Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-services
+          file: ./go-services/Dockerfile.device-service
+          push: false
+          tags: esp-device-service:test
+
+      - name: Build MQTT Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-services
+          file: ./go-services/Dockerfile.mqtt-service
+          push: false
+          tags: esp-mqtt-service:test
+
+      - name: Build WebSocket Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-services
+          file: ./go-services/Dockerfile.websocket-service
+          push: false
+          tags: esp-websocket-service:test
