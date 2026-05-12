@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 資料庫
+  postgres:
+    image: postgres:16-alpine
+    container_name: esp-postgres
+    environment:
+      POSTGRES_USER: esp_user
+      POSTGRES_PASSWORD: esp_password
+      POSTGRES_DB: esp_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - esp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U esp_user -d esp_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MQTT Broker (Eclipse Mosquitto)
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: esp-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - esp-network
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 認證服務
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.auth-service
+    container_name: esp-auth-service
+    environment:
+      PORT: 8081
+      DATABASE_URL: postgresql://esp_user:esp_password@postgres:5432/esp_platform?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - esp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 設備服務
+  device-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.device-service
+    container_name: esp-device-service
+    environment:
+      PORT: 8082
+      DATABASE_URL: postgresql://esp_user:esp_password@postgres:5432/esp_platform?sslmode=disable
+      MQTT_SERVICE_URL: http://mqtt-service:8083
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-internal-secret-token}
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - esp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # MQTT 服務
+  mqtt-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.mqtt-service
+    container_name: esp-mqtt-service
+    environment:
+      PORT: 8083
+      DATABASE_URL: postgresql://esp_user:esp_password@postgres:5432/esp_platform?sslmode=disable
+      MQTT_BROKER: tcp://mosquitto:1883
+      WEBSOCKET_SERVICE_URL: http://websocket-service:8084
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-internal-secret-token}
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    networks:
+      - esp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # WebSocket 服務
+  websocket-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.websocket-service
+    container_name: esp-websocket-service
+    environment:
+      PORT: 8084
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-internal-secret-token}
+    ports:
+      - "8084:8084"
+    networks:
+      - esp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8084/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.api-gateway
+    container_name: esp-api-gateway
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgresql://esp_user:esp_password@postgres:5432/esp_platform?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      DEVICE_SERVICE_URL: http://device-service:8082
+      MQTT_SERVICE_URL: http://mqtt-service:8083
+      WEBSOCKET_SERVICE_URL: http://websocket-service:8084
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-internal-secret-token}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      device-service:
+        condition: service_healthy
+      mqtt-service:
+        condition: service_healthy
+      websocket-service:
+        condition: service_healthy
+    networks:
+      - esp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  esp-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_logs:
