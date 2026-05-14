@@ -53,6 +53,12 @@ func Debug(msg string, args ...any) {
 	log.Debug(msg, args...)
 }
 
+// Fatal 記錄 fatal 級別日誌並退出程序
+func Fatal(msg string, args ...any) {
+	log.Error(msg, args...)
+	os.Exit(1)
+}
+
 // Get 獲取全局 logger
 func Get() *slog.Logger {
 	return log

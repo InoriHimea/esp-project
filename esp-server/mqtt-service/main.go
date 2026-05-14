@@ -17,18 +17,25 @@ import (
 	"github.com/inorihimea/esp-platform/shared/models"
 )
 
-var db database.DB
+var db *database.DB
 
 func main() {
 	logger.Init("mqtt-service")
 	logger.Info("Starting MQTT Service...")
 
 	// 載入配置
-	cfg := config.Load()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger.Fatal("Failed to load config", "error", err)
+	}
+
+	// 驗證必需配置
+	if err := cfg.ValidateRequired("DATABASE_URL", "MQTT_BROKER"); err != nil {
+		logger.Fatal("Config validation failed", "error", err)
+	}
 
 	// 連接資料庫
-	var err error
-	db, err = database.Connect(cfg.DatabaseURL)
+	db, err = database.Connect(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", "error", err)
 	}
@@ -54,7 +61,7 @@ func main() {
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		dbHealthy := "healthy"
-		if err := db.Ping(); err != nil {
+		if err := db.HealthCheck(context.Background()); err != nil {
 			dbHealthy = "unhealthy"
 		}
 
@@ -87,7 +94,7 @@ func main() {
 	handler := middleware.RequestID(
 		middleware.Logger(
 			middleware.Recovery(
-				middleware.CORS(mux),
+				middleware.CORS(cfg.CORSOrigins)(mux),
 			),
 		),
 	)

@@ -36,7 +36,15 @@ func main() {
 	logger.Info("Starting WebSocket Service...")
 
 	// 載入配置
-	cfg := config.Load()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger.Fatal("Failed to load config", "error", err)
+	}
+
+	// 驗證必需配置
+	if err := cfg.ValidateRequired("MQTT_BROKER"); err != nil {
+		logger.Fatal("Config validation failed", "error", err)
+	}
 
 	// 連接 MQTT
 	opts := mqtt.NewClientOptions().
@@ -90,7 +98,7 @@ func main() {
 	handler := middleware.RequestID(
 		middleware.Logger(
 			middleware.Recovery(
-				middleware.CORS(mux),
+				middleware.CORS(cfg.CORSOrigins)(mux),
 			),
 		),
 	)
@@ -167,7 +175,7 @@ func handleMQTTMessage(client mqtt.Client, msg mqtt.Message) {
 
 	// 廣播到所有 WebSocket 客戶端
 	broadcast := models.BroadcastMessage{
-		Type:     "device_status",
+		Type:     "status",  // 修改為 "status" 以匹配前端期望
 		DeviceID: deviceID,
 		Payload:  status,
 	}

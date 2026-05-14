@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -38,21 +37,23 @@ func main() {
 	logger.Info("Starting API Gateway...")
 
 	// 載入配置
-	cfg := config.Load()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger.Fatal("Failed to load config", "error", err)
+	}
+
+	// 驗證必需配置
+	if err := cfg.ValidateRequired("JWT_SECRET"); err != nil {
+		logger.Fatal("Config validation failed", "error", err)
+	}
 
 	// 初始化 JWT
-	jwt.Init(cfg.JWTSecret)
+	jwtManager := jwt.NewManager(cfg.JWTSecret)
 
-	// 從環境變數覆蓋服務 URL（如果提供）
-	if url := os.Getenv("AUTH_SERVICE_URL"); url != "" {
-		authServiceURL = url
-	}
-	if url := os.Getenv("DEVICE_SERVICE_URL"); url != "" {
-		deviceServiceURL = url
-	}
-	if url := os.Getenv("WEBSOCKET_SERVICE_URL"); url != "" {
-		websocketServiceURL = url
-	}
+	// 從配置覆蓋服務 URL
+	authServiceURL = cfg.AuthServiceURL
+	deviceServiceURL = cfg.DeviceServiceURL
+	websocketServiceURL = cfg.WebSocketServiceURL
 
 	// 設置路由
 	mux := http.NewServeMux()
@@ -68,20 +69,20 @@ func main() {
 	})
 
 	// 認證端點（不需要認證）
-	mux.HandleFunc("/api/v1/auth/login", proxyToService(authServiceURL, "/login", false))
+	mux.HandleFunc("/api/v1/auth/login", proxyToService(authServiceURL, "/login", false, jwtManager))
 
 	// 設備端點（需要認證）
-	mux.HandleFunc("/api/v1/devices", proxyToService(deviceServiceURL, "/devices", true))
-	mux.HandleFunc("/api/v1/devices/", proxyToService(deviceServiceURL, "/devices/", true))
+	mux.HandleFunc("/api/v1/devices", proxyToService(deviceServiceURL, "/devices", true, jwtManager))
+	mux.HandleFunc("/api/v1/devices/", proxyToService(deviceServiceURL, "/devices/", true, jwtManager))
 
 	// WebSocket 端點（需要認證）
-	mux.HandleFunc("/ws", handleWebSocket)
+	mux.HandleFunc("/ws", handleWebSocket(jwtManager))
 
 	// 應用中間件
 	handler := middleware.RequestID(
 		middleware.Logger(
 			middleware.Recovery(
-				middleware.CORS(mux),
+				middleware.CORS(cfg.CORSOrigins)(mux),
 			),
 		),
 	)
@@ -119,7 +120,7 @@ func main() {
 	logger.Info("Server exited")
 }
 
-func proxyToService(serviceURL, path string, requireAuth bool) http.HandlerFunc {
+func proxyToService(serviceURL, path string, requireAuth bool, jwtManager *jwt.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 認證檢查
 		if requireAuth {
@@ -147,7 +148,7 @@ func proxyToService(serviceURL, path string, requireAuth bool) http.HandlerFunc 
 			}
 
 			token := parts[1]
-			if _, err := jwt.Verify(token); err != nil {
+			if _, err := jwtManager.Verify(token); err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				json.NewEncoder(w).Encode(models.ErrorResponse{
@@ -192,19 +193,20 @@ func proxyToService(serviceURL, path string, requireAuth bool) http.HandlerFunc 
 	}
 }
 
-func handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	// 從查詢參數獲取 token
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		http.Error(w, "Token required", http.StatusUnauthorized)
-		return
-	}
+func handleWebSocket(jwtManager *jwt.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 從查詢參數獲取 token
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			http.Error(w, "Token required", http.StatusUnauthorized)
+			return
+		}
 
-	// 驗證 token
-	if _, err := jwt.Verify(token); err != nil {
-		http.Error(w, "Invalid token", http.StatusUnauthorized)
-		return
-	}
+		// 驗證 token
+		if _, err := jwtManager.Verify(token); err != nil {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
 
 	// 連接到 WebSocket 服務
 	wsURL := strings.Replace(websocketServiceURL, "http://", "ws://", 1) + "/ws"
@@ -266,4 +268,5 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info("WebSocket connection closed", "remote_addr", r.RemoteAddr)
+	}
 }

@@ -23,17 +23,25 @@ func main() {
 	logger.Info("Starting Auth Service...")
 
 	// 載入配置
-	cfg := config.Load()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger.Fatal("Failed to load config", "error", err)
+	}
+
+	// 驗證必需配置
+	if err := cfg.ValidateRequired("DATABASE_URL", "JWT_SECRET"); err != nil {
+		logger.Fatal("Config validation failed", "error", err)
+	}
 
 	// 連接資料庫
-	db, err := database.Connect(cfg.DatabaseURL)
+	db, err := database.Connect(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", "error", err)
 	}
 	defer db.Close()
 
 	// 初始化 JWT
-	jwt.Init(cfg.JWTSecret)
+	jwtManager := jwt.NewManager(cfg.JWTSecret)
 
 	// 設置路由
 	mux := http.NewServeMux()
@@ -41,7 +49,7 @@ func main() {
 	// 健康檢查
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		dbHealthy := "healthy"
-		if err := db.Ping(); err != nil {
+		if err := db.HealthCheck(context.Background()); err != nil {
 			dbHealthy = "unhealthy"
 		}
 
@@ -66,13 +74,13 @@ func main() {
 	})
 
 	// 登入端點
-	mux.HandleFunc("/login", handleLogin(db))
+	mux.HandleFunc("/login", handleLogin(db, jwtManager))
 
 	// 應用中間件
 	handler := middleware.RequestID(
 		middleware.Logger(
 			middleware.Recovery(
-				middleware.CORS(mux),
+				middleware.CORS(cfg.CORSOrigins)(mux),
 			),
 		),
 	)
@@ -110,7 +118,7 @@ func main() {
 	logger.Info("Server exited")
 }
 
-func handleLogin(db database.DB) http.HandlerFunc {
+func handleLogin(db *database.DB, jwtManager *jwt.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -170,7 +178,7 @@ func handleLogin(db database.DB) http.HandlerFunc {
 		}
 
 		// 生成 JWT
-		token, err := jwt.Generate(user.ID, user.Username)
+		token, err := jwtManager.Generate(user.ID, user.Username, 24*time.Hour)
 		if err != nil {
 			logger.Error("Failed to generate token", "error", err)
 			w.Header().Set("Content-Type", "application/json")

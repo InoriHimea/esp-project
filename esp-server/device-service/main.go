@@ -24,10 +24,18 @@ func main() {
 	logger.Info("Starting Device Service...")
 
 	// 載入配置
-	cfg := config.Load()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		logger.Fatal("Failed to load config", "error", err)
+	}
+
+	// 驗證必需配置
+	if err := cfg.ValidateRequired("DATABASE_URL", "MQTT_BROKER"); err != nil {
+		logger.Fatal("Config validation failed", "error", err)
+	}
 
 	// 連接資料庫
-	db, err := database.Connect(cfg.DatabaseURL)
+	db, err := database.Connect(context.Background(), cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatal("Failed to connect to database", "error", err)
 	}
@@ -53,7 +61,7 @@ func main() {
 	// 健康檢查
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		dbHealthy := "healthy"
-		if err := db.Ping(); err != nil {
+		if err := db.HealthCheck(context.Background()); err != nil {
 			dbHealthy = "unhealthy"
 		}
 
@@ -91,7 +99,7 @@ func main() {
 	handler := middleware.RequestID(
 		middleware.Logger(
 			middleware.Recovery(
-				middleware.CORS(mux),
+				middleware.CORS(cfg.CORSOrigins)(mux),
 			),
 		),
 	)
@@ -129,7 +137,7 @@ func main() {
 	logger.Info("Server exited")
 }
 
-func handleGetDevices(db database.DB) http.HandlerFunc {
+func handleGetDevices(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -172,7 +180,7 @@ func handleGetDevices(db database.DB) http.HandlerFunc {
 	}
 }
 
-func handleDeviceRoutes(db database.DB) http.HandlerFunc {
+func handleDeviceRoutes(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 解析路徑：/devices/{id}/{action}
 		path := r.URL.Path[len("/devices/"):]
@@ -194,7 +202,7 @@ func handleDeviceRoutes(db database.DB) http.HandlerFunc {
 	}
 }
 
-func handleGetDeviceStatus(db database.DB) http.HandlerFunc {
+func handleGetDeviceStatus(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 從路徑提取設備 ID
 		deviceID := extractDeviceID(r.URL.Path)
@@ -224,7 +232,7 @@ func handleGetDeviceStatus(db database.DB) http.HandlerFunc {
 	}
 }
 
-func handleGetDeviceHistory(db database.DB) http.HandlerFunc {
+func handleGetDeviceHistory(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		deviceID := extractDeviceID(r.URL.Path)
 
@@ -262,7 +270,7 @@ func handleGetDeviceHistory(db database.DB) http.HandlerFunc {
 	}
 }
 
-func handleSendCommand(db database.DB) http.HandlerFunc {
+func handleSendCommand(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
