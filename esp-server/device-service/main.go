@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -183,30 +184,40 @@ func handleGetDevices(db *database.DB) http.HandlerFunc {
 func handleDeviceRoutes(db *database.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 解析路徑：/devices/{id}/{action}
-		path := r.URL.Path[len("/devices/"):]
-		if path == "" {
+		path := strings.TrimPrefix(r.URL.Path, "/devices/")
+		parts := strings.Split(path, "/")
+		
+		if len(parts) < 1 || parts[0] == "" {
 			http.Error(w, "Device ID required", http.StatusBadRequest)
 			return
 		}
 
-		// 簡單路由
-		if r.URL.Path[len(r.URL.Path)-7:] == "/status" {
-			handleGetDeviceStatus(db)(w, r)
-		} else if r.URL.Path[len(r.URL.Path)-8:] == "/history" {
-			handleGetDeviceHistory(db)(w, r)
-		} else if r.URL.Path[len(r.URL.Path)-8:] == "/command" {
-			handleSendCommand(db)(w, r)
+		deviceID := parts[0]
+
+		// 根據路徑長度和最後一部分判斷動作
+		if len(parts) == 1 {
+			// /devices/{id} - 獲取設備詳情（與 status 相同）
+			handleGetDeviceStatus(db, deviceID)(w, r)
+		} else if len(parts) == 2 {
+			action := parts[1]
+			switch action {
+			case "status":
+				handleGetDeviceStatus(db, deviceID)(w, r)
+			case "history":
+				handleGetDeviceHistory(db, deviceID)(w, r)
+			case "command":
+				handleSendCommand(db, deviceID)(w, r)
+			default:
+				http.Error(w, "Unknown action", http.StatusNotFound)
+			}
 		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
+			http.Error(w, "Invalid path", http.StatusBadRequest)
 		}
 	}
 }
 
-func handleGetDeviceStatus(db *database.DB) http.HandlerFunc {
+func handleGetDeviceStatus(db *database.DB, deviceID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 從路徑提取設備 ID
-		deviceID := extractDeviceID(r.URL.Path)
-
 		var d models.Device
 		var lastStatus []byte
 		err := db.QueryRow(`
@@ -232,10 +243,8 @@ func handleGetDeviceStatus(db *database.DB) http.HandlerFunc {
 	}
 }
 
-func handleGetDeviceHistory(db *database.DB) http.HandlerFunc {
+func handleGetDeviceHistory(db *database.DB, deviceID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		deviceID := extractDeviceID(r.URL.Path)
-
 		rows, err := db.Query(`
 			SELECT id, device_id, ts, payload
 			FROM device_events
@@ -270,14 +279,12 @@ func handleGetDeviceHistory(db *database.DB) http.HandlerFunc {
 	}
 }
 
-func handleSendCommand(db *database.DB) http.HandlerFunc {
+func handleSendCommand(db *database.DB, deviceID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-
-		deviceID := extractDeviceID(r.URL.Path)
 
 		var cmd models.CommandRequest
 		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
@@ -308,20 +315,4 @@ func handleSendCommand(db *database.DB) http.HandlerFunc {
 			"status": "ok",
 		})
 	}
-}
-
-func extractDeviceID(path string) string {
-	// 從 /devices/{id}/... 提取 ID
-	parts := []rune(path)
-	start := 0
-	for i, c := range parts {
-		if c == '/' {
-			if start == 0 {
-				start = i + 1
-			} else {
-				return string(parts[start:i])
-			}
-		}
-	}
-	return string(parts[start:])
 }

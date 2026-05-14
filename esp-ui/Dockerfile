@@ -1,13 +1,14 @@
-FROM node:22-alpine AS builder
+FROM node:26.1.0-alpine3.23 AS builder
 WORKDIR /app
 ARG VITE_SERVER_API
 ARG VITE_SERVER_WS
-COPY package*.json ./
-RUN npm ci
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN pnpm build
 
-FROM nginx:alpine
+FROM nginx:1.30.0-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

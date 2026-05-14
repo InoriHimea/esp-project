@@ -15,21 +15,21 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.26.3'
 
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Build binaries
-        working-directory: ./go-services
+        working-directory: ./esp-server
         run: |
           # 創建輸出目錄
           mkdir -p ../dist
@@ -151,7 +151,7 @@ jobs:
           #### 使用 Docker Compose（推薦）
           
           ```bash
-          cd go-services
+          cd esp-server
           cp .env.example .env
           # 編輯 .env 設置 JWT_SECRET 等
           docker compose up -d
@@ -180,10 +180,10 @@ jobs:
           
           ### 📖 文檔
           
-          - [README](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/go-services/README.md)
-          - [快速啟動指南](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/go-services/QUICKSTART.md)
-          - [部署指南](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/go-services/DEPLOYMENT.md)
-          - [遷移指南](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/go-services/MIGRATION.md)
+          - [README](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/esp-server/README.md)
+          - [快速啟動指南](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/esp-server/QUICKSTART.md)
+          - [部署指南](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/esp-server/DEPLOYMENT.md)
+          - [遷移指南](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/esp-server/MIGRATION.md)
           
           ### 🔐 校驗和
           
@@ -195,11 +195,11 @@ jobs:
           
           ### 📝 變更日誌
           
-          詳細變更請查看 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/go-services/CHANGELOG.md)
+          詳細變更請查看 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ steps.get_version.outputs.VERSION }}/esp-server/CHANGELOG.md)
           EOF
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           body_path: release_notes.md
           files: |

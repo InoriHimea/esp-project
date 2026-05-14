@@ -13,15 +13,15 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.26.3'
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/go-build
@@ -31,25 +31,25 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Download dependencies
-        working-directory: ./go-services
+        working-directory: ./esp-server
         run: go mod download
 
       - name: Verify dependencies
-        working-directory: ./go-services
+        working-directory: ./esp-server
         run: go mod verify
 
       - name: Run go vet
-        working-directory: ./go-services
+        working-directory: ./esp-server
         run: go vet ./...
 
       - name: Run tests
-        working-directory: ./go-services
+        working-directory: ./esp-server
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v6
         with:
-          files: ./go-services/coverage.txt
+          files: ./esp-server/coverage.txt
           flags: unittests
           name: codecov-umbrella
 
@@ -68,15 +68,15 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.26.3'
 
       - name: Build
-        working-directory: ./go-services
+        working-directory: ./esp-server
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -94,18 +94,18 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.26.3'
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
-          working-directory: ./go-services
+          working-directory: ./esp-server
           args: --timeout=5m
 
   docker:
@@ -115,49 +115,49 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build API Gateway
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
-          context: ./go-services
-          file: ./go-services/Dockerfile.api-gateway
+          context: ./esp-server
+          file: ./esp-server/Dockerfile.api-gateway
           push: false
           tags: esp-api-gateway:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Build Auth Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
-          context: ./go-services
-          file: ./go-services/Dockerfile.auth-service
+          context: ./esp-server
+          file: ./esp-server/Dockerfile.auth-service
           push: false
           tags: esp-auth-service:test
 
       - name: Build Device Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
-          context: ./go-services
-          file: ./go-services/Dockerfile.device-service
+          context: ./esp-server
+          file: ./esp-server/Dockerfile.device-service
           push: false
           tags: esp-device-service:test
 
       - name: Build MQTT Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
-          context: ./go-services
-          file: ./go-services/Dockerfile.mqtt-service
+          context: ./esp-server
+          file: ./esp-server/Dockerfile.mqtt-service
           push: false
           tags: esp-mqtt-service:test
 
       - name: Build WebSocket Service
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
-          context: ./go-services
-          file: ./go-services/Dockerfile.websocket-service
+          context: ./esp-server
+          file: ./esp-server/Dockerfile.websocket-service
           push: false
           tags: esp-websocket-service:test

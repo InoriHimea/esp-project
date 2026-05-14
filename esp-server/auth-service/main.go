@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -75,6 +76,9 @@ func main() {
 
 	// 登入端點
 	mux.HandleFunc("/login", handleLogin(db, jwtManager))
+
+	// 修改密碼端點
+	mux.HandleFunc("/change-password", handleChangePassword(db, jwtManager))
 
 	// 應用中間件
 	handler := middleware.RequestID(
@@ -197,6 +201,144 @@ func handleLogin(db *database.DB, jwtManager *jwt.Manager) http.HandlerFunc {
 		json.NewEncoder(w).Encode(models.LoginResponse{
 			Token:     token,
 			ExpiresIn: 86400, // 24 小時
+		})
+	}
+}
+
+func handleChangePassword(db *database.DB, jwtManager *jwt.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// 驗證 JWT
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "unauthorized",
+				Message: "Authorization header required",
+			})
+			return
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "unauthorized",
+				Message: "Invalid authorization format",
+			})
+			return
+		}
+
+		claims, err := jwtManager.Verify(parts[1])
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "unauthorized",
+				Message: "Invalid or expired token",
+			})
+			return
+		}
+
+		// 解析請求
+		var req struct {
+			OldPassword string `json:"old_password"`
+			NewPassword string `json:"new_password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: "Invalid JSON",
+			})
+			return
+		}
+
+		// 驗證輸入
+		if req.OldPassword == "" || req.NewPassword == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: "Old password and new password are required",
+			})
+			return
+		}
+
+		// 查詢用戶當前密碼
+		var currentPassword string
+		err = db.QueryRow(
+			"SELECT password FROM users WHERE id = $1",
+			claims.UserID,
+		).Scan(&currentPassword)
+
+		if err != nil {
+			logger.Error("Failed to query user", "error", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to query user",
+			})
+			return
+		}
+
+		// 驗證舊密碼
+		if err := bcrypt.CompareHashAndPassword([]byte(currentPassword), []byte(req.OldPassword)); err != nil {
+			logger.Warn("Change password failed", "user_id", claims.UserID, "error", "invalid old password")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "invalid_credentials",
+				Message: "Old password is incorrect",
+			})
+			return
+		}
+
+		// 哈希新密碼
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		if err != nil {
+			logger.Error("Failed to hash password", "error", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to hash password",
+			})
+			return
+		}
+
+		// 更新密碼
+		_, err = db.Exec(
+			"UPDATE users SET password = $1 WHERE id = $2",
+			string(hashedPassword), claims.UserID,
+		)
+
+		if err != nil {
+			logger.Error("Failed to update password", "error", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "internal_error",
+				Message: "Failed to update password",
+			})
+			return
+		}
+
+		logger.Info("Password changed", "user_id", claims.UserID, "username", claims.Username)
+
+		// 返回成功
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Password changed successfully",
 		})
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -14,10 +15,12 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/inorihimea/esp-platform/shared/config"
+	"github.com/inorihimea/esp-platform/shared/database"
 	"github.com/inorihimea/esp-platform/shared/jwt"
 	"github.com/inorihimea/esp-platform/shared/logger"
 	"github.com/inorihimea/esp-platform/shared/middleware"
 	"github.com/inorihimea/esp-platform/shared/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -43,9 +46,29 @@ func main() {
 	}
 
 	// 驗證必需配置
-	if err := cfg.ValidateRequired("JWT_SECRET"); err != nil {
+	if err := cfg.ValidateRequired("JWT_SECRET", "DATABASE_URL"); err != nil {
 		logger.Fatal("Config validation failed", "error", err)
 	}
+
+	// 連接資料庫（用於遷移和初始化）
+	db, err := database.Connect(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		logger.Fatal("Failed to connect to database", "error", err)
+	}
+
+	// 執行數據庫遷移
+	logger.Info("Running database migrations...")
+	if err := db.RunMigrations(context.Background()); err != nil {
+		logger.Fatal("Failed to run migrations", "error", err)
+	}
+	logger.Info("Database migrations completed")
+
+	// 初始化默認管理員賬號
+	if err := initializeDefaultAdmin(db); err != nil {
+		logger.Fatal("Failed to initialize default admin", "error", err)
+	}
+
+	db.Close()
 
 	// 初始化 JWT
 	jwtManager := jwt.NewManager(cfg.JWTSecret)
@@ -70,6 +93,9 @@ func main() {
 
 	// 認證端點（不需要認證）
 	mux.HandleFunc("/api/v1/auth/login", proxyToService(authServiceURL, "/login", false, jwtManager))
+
+	// 修改密碼端點（需要認證）
+	mux.HandleFunc("/api/v1/auth/change-password", proxyToService(authServiceURL, "/change-password", true, jwtManager))
 
 	// 設備端點（需要認證）
 	mux.HandleFunc("/api/v1/devices", proxyToService(deviceServiceURL, "/devices", true, jwtManager))
@@ -269,4 +295,38 @@ func handleWebSocket(jwtManager *jwt.Manager) http.HandlerFunc {
 
 	logger.Info("WebSocket connection closed", "remote_addr", r.RemoteAddr)
 	}
+}
+
+// initializeDefaultAdmin 初始化默認管理員賬號
+func initializeDefaultAdmin(db *database.DB) error {
+	ctx := context.Background()
+
+	// 檢查是否已存在 admin 用戶
+	var count int
+	err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE username = $1", "admin").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check admin user: %w", err)
+	}
+
+	if count > 0 {
+		logger.Info("Default admin user already exists")
+		return nil
+	}
+
+	// 創建默認管理員賬號
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	_, err = db.ExecContext(ctx,
+		"INSERT INTO users (username, password) VALUES ($1, $2)",
+		"admin", string(hashedPassword),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create admin user: %w", err)
+	}
+
+	logger.Info("Default admin user created", "username", "admin", "password", "changeme")
+	return nil
 }
