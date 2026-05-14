@@ -31,12 +31,12 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Build artifacts
-api-gateway
-auth-service
-device-service
-mqtt-service
-websocket-service
+# Build artifacts (binaries in root directory only)
+/api-gateway
+/auth-service
+/device-service
+/mqtt-service
+/websocket-service
 
 # Docker volumes
 postgres_data/
