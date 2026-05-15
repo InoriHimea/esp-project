@@ -5,6 +5,70 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 版本號遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [1.1.0] - 2024-05-15
+
+### 修復
+
+#### 後端編譯問題（階段 1）
+- 🐛 補齊 Go 依賴
+  - 添加 `github.com/gorilla/websocket v1.5.3`
+  - 添加 `golang.org/x/crypto v0.51.0`（bcrypt）
+  - 添加 `github.com/eclipse/paho.mqtt.golang v1.5.1`
+- 🔧 統一 config 接口
+  - 所有服務使用 `config.LoadConfig()`
+  - 添加配置驗證 `ValidateRequired()`
+- 🔧 統一 database 接口
+  - 使用 `database.Connect(context.Background(), url)`
+  - 統一使用 `*database.DB` 類型
+  - 健康檢查使用 `db.HealthCheck(ctx)`
+- 🔧 統一 JWT 接口
+  - 使用 `jwt.Manager` 模式
+  - `jwtManager.Generate(userID, username, duration)`
+  - `jwtManager.Verify(token)`
+- 🔧 統一 middleware.CORS 調用
+  - 使用 `middleware.CORS(cfg.CORSOrigins)(mux)`
+- ✨ 添加 `logger.Fatal()` 函數
+
+#### 後端運行邏輯（階段 2）
+- ✨ 數據庫自動遷移
+  - API Gateway 啟動時執行 `db.RunMigrations()`
+  - 自動創建 users、devices、device_events 表
+- ✨ 默認管理員賬號初始化
+  - 自動創建 admin 用戶（密碼：changeme）
+  - 避免重複創建
+- 🔧 改進 Device Service 路由解析
+  - 使用 `strings.Split` 穩定解析路徑
+  - 支持所有設備 API 端點
+  - 移除不穩定的字符串長度判斷
+- ✨ 實現密碼修改端點
+  - Auth Service: `POST /change-password`
+  - API Gateway: `POST /api/v1/auth/change-password`
+  - 完整的舊密碼驗證流程
+- 🐛 修復 WebSocket 消息類型
+  - 發送 `"status"` 而非 `"device_status"`
+  - 匹配前端期望的協議
+
+### 新增
+
+#### ESP32 韌體改進
+- 🔧 修正數碼管為共陽極配置
+  - 添加 `common_anode` 配置標誌
+  - 支持共陽極段選和位選邏輯
+  - 向後兼容共陰極配置
+  - 修正實際硬件引腳映射
+
+#### 文檔
+- 📚 添加 `plan.md` 開發計劃文檔
+  - 詳細的階段性任務分解
+  - 驗收標準和測試清單
+  - 風險評估和完成度目標
+
+### 技術改進
+- ⚡ 所有微服務編譯通過
+- ⚡ 統一的錯誤處理
+- ⚡ 完整的配置驗證
+- ⚡ 改進的日誌記錄
+
 ## [1.0.0] - 2024-01-15
 
 ### 新增

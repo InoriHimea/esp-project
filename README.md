@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.1.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](esp-server/LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
 
 完整的 ESP32 設備控制平台，包含後端微服務、前端 UI 和 ESP32 韌體。
 
-**當前版本：v1.0.0**
+**當前版本：v1.1.0**
 
 ## 📋 專案概述
 
@@ -264,6 +264,23 @@ npm test
 ```
 
 ## 📝 版本歷史
+
+### v1.1.0 (2024-05-15)
+- 🐛 修復後端編譯問題
+  - 補齊 Go 依賴（websocket, bcrypt, mqtt）
+  - 統一 config、database、JWT、middleware 接口
+  - 添加 logger.Fatal() 函數
+- ✨ 完善後端運行邏輯
+  - 數據庫自動遷移和初始化
+  - 默認管理員賬號自動創建（admin/changeme）
+  - 改進 Device Service 路由解析
+  - 實現密碼修改端點
+  - 修復 WebSocket 消息類型（匹配前端協議）
+- 🔧 修正 ESP32 數碼管配置
+  - 支持共陽極數碼管（Common Anode）
+  - 修正段選和位選邏輯
+  - 向後兼容共陰極配置
+- 📚 添加 plan.md 開發計劃文檔
 
 ### v1.0.0 (2024-01-15)
 - ✨ 初始發布

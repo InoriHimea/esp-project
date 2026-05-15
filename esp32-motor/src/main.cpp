@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  ESP32 Motor Controller — main.cpp
-//  Version: 1.0.0
+//  Version: 1.1.0
 //
 //  Hardware:  ESP32 + DRV8871 + JGB37-520 + Mini 560 buck converter
 //
