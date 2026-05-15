@@ -4,15 +4,15 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  DirectDisplay
 //
-//  直接用 ESP32 GPIO 驱动 3 位共阴 7 段数码管，无需任何驱动芯片。
+//  直接用 ESP32 GPIO 驱动 3 位共阳 7 段数码管，无需任何驱动芯片。
 //
-//  接线（共阴，低电平位选有效）：
+//  接线（共阳，高电平位选有效）：
 //    段选（每根串联 220Ω 电阻）：
-//      GPIO23 → a    GPIO25 → b    GPIO26 → c
-//      GPIO27 → d    GPIO32 → e    GPIO33 → f
-//      GPIO14 → g
-//    位选（直连，低电平有效）：
-//      GPIO13 → D1(百位)   GPIO12 → D2(十位)   GPIO4 → D3(个位)
+//      上2 → a    上6 → b    下4 → c
+//      下2 → d    下1 → e    上3 → f
+//      下5 → g    下3 → dp(可选)
+//    位选（直连，高电平有效）：
+//      上1 → COM1(第1位)   上4 → COM2(第2位)   上5 → COM3(第3位)
 //
 //  扫描方式：FreeRTOS task，每位亮 1ms，三位循环 → 刷新率 ~333Hz
 //
@@ -21,29 +21,31 @@
 //    模式 1 → 占空比 %（0-100）
 //    模式 2 → 原始 duty（0-999）
 //
-//  注意：GPIO12 有 boot strapping 功能，烧录时请拔开 D2 连线。
-//        或将 D2 改为 GPIO5（修改 DirectDisplayConfig::pin_d2 即可）。
+//  注意：共阳极数码管，段选低电平点亮，位选高电平有效。
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum class DispMode : uint8_t { RPM = 0, PCT = 1, RAW = 2 };
 
 struct DirectDisplayConfig {
     // 段选 GPIO（a~g，不含 dp）
-    uint8_t seg_a = 23;
-    uint8_t seg_b = 25;
-    uint8_t seg_c = 26;
-    uint8_t seg_d = 27;
-    uint8_t seg_e = 32;
-    uint8_t seg_f = 33;
-    uint8_t seg_g = 14;
+    // 共阳极：低电平点亮段
+    uint8_t seg_a = 23;   // 上2
+    uint8_t seg_b = 25;   // 上6
+    uint8_t seg_c = 26;   // 下4
+    uint8_t seg_d = 27;   // 下2
+    uint8_t seg_e = 32;   // 下1
+    uint8_t seg_f = 33;   // 上3
+    uint8_t seg_g = 14;   // 下5
 
-    // 位选 GPIO（低电平有效）
-    uint8_t pin_d1 = 13;   // 百位（最左）
-    uint8_t pin_d2 = 12;   // 十位
-    uint8_t pin_d3 =  4;   // 个位（最右）
+    // 位选 GPIO（共阳极：高电平有效）
+    uint8_t pin_d1 = 13;   // 上1: COM1（第1位，百位/最左）
+    uint8_t pin_d2 = 12;   // 上4: COM2（第2位，十位）
+    uint8_t pin_d3 =  4;   // 上5: COM3（第3位，个位/最右）
 
     uint16_t rated_rpm     = 100;   // 电机额定空载转速（按齿轮比填写）
     uint32_t mode_cycle_ms = 3000;  // 自动切换模式间隔
+    
+    bool common_anode = true;       // true=共阳极，false=共阴极
 };
 
 class DirectDisplay {

@@ -1,8 +1,9 @@
 #include "DirectDisplay.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  共阴 7 段段码表（bit0=a, bit1=b, bit2=c, bit3=d, bit4=e, bit5=f, bit6=g）
+//  共阴/共阳 7 段段码表（bit0=a, bit1=b, bit2=c, bit3=d, bit4=e, bit5=f, bit6=g）
 //  例：'8' = 所有段亮 = 0b0111 1111 = 0x7F
+//  注意：实际输出时，共阳极会在 _writeSegments() 中反转
 // ─────────────────────────────────────────────────────────────────────────────
 const uint8_t DirectDisplay::DIGIT_MAP[10] = {
     0b00111111,  // 0: a b c d e f
@@ -26,21 +27,25 @@ DirectDisplay::DirectDisplay(const DirectDisplayConfig& cfg) : _cfg(cfg) {}
 void DirectDisplay::begin() {
     _mutex = xSemaphoreCreateMutex();
 
-    // 配置段选引脚为输出，初始低电平（共阴，LOW=段灭）
+    // 配置段选引脚为输出
+    // 共阳极：初始高电平（段灭），低电平点亮
+    // 共阴极：初始低电平（段灭），高电平点亮
     const uint8_t segs[7] = {
         _cfg.seg_a, _cfg.seg_b, _cfg.seg_c, _cfg.seg_d,
         _cfg.seg_e, _cfg.seg_f, _cfg.seg_g
     };
     for (uint8_t p : segs) {
         pinMode(p, OUTPUT);
-        digitalWrite(p, LOW);
+        digitalWrite(p, _cfg.common_anode ? HIGH : LOW);
     }
 
-    // 配置位选引脚为输出，初始高电平（共阴，HIGH=位灭）
+    // 配置位选引脚为输出
+    // 共阳极：初始低电平（位灭），高电平有效
+    // 共阴极：初始高电平（位灭），低电平有效
     const uint8_t digs[3] = {_cfg.pin_d1, _cfg.pin_d2, _cfg.pin_d3};
     for (uint8_t p : digs) {
         pinMode(p, OUTPUT);
-        digitalWrite(p, HIGH);
+        digitalWrite(p, _cfg.common_anode ? LOW : HIGH);
     }
 
     // 开机动画：从左到右依次点亮横杠
@@ -66,8 +71,8 @@ void DirectDisplay::begin() {
         1          // core 1
     );
 
-    Serial.printf("[Display] begin() segs=23/25/26/27/32/33/14 digits=13/12/4 rated=%uRPM\n",
-                  _cfg.rated_rpm);
+    Serial.printf("[Display] begin() type=%s segs=23/25/26/27/32/33/14 coms=13/12/4 rated=%uRPM\n",
+                  _cfg.common_anode ? "CA" : "CC", _cfg.rated_rpm);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,21 +161,34 @@ void DirectDisplay::_writeSegments(uint8_t s) {
         _cfg.seg_e, _cfg.seg_f, _cfg.seg_g
     };
     for (int i = 0; i < 7; i++) {
-        digitalWrite(pins[i], (s >> i) & 0x01);
+        bool bit_on = (s >> i) & 0x01;
+        // 共阳极：反转逻辑（低电平点亮）
+        // 共阴极：正常逻辑（高电平点亮）
+        digitalWrite(pins[i], _cfg.common_anode ? !bit_on : bit_on);
     }
 }
 
 void DirectDisplay::_selectDigit(uint8_t idx) {
-    // 共阴：拉低对应位选，其余拉高
-    digitalWrite(_cfg.pin_d1, idx != 0);
-    digitalWrite(_cfg.pin_d2, idx != 1);
-    digitalWrite(_cfg.pin_d3, idx != 2);
+    // 共阳极：拉高对应位选，其余拉低
+    // 共阴极：拉低对应位选，其余拉高
+    if (_cfg.common_anode) {
+        digitalWrite(_cfg.pin_d1, idx == 0);
+        digitalWrite(_cfg.pin_d2, idx == 1);
+        digitalWrite(_cfg.pin_d3, idx == 2);
+    } else {
+        digitalWrite(_cfg.pin_d1, idx != 0);
+        digitalWrite(_cfg.pin_d2, idx != 1);
+        digitalWrite(_cfg.pin_d3, idx != 2);
+    }
 }
 
 void DirectDisplay::_deselectAll() {
-    digitalWrite(_cfg.pin_d1, HIGH);
-    digitalWrite(_cfg.pin_d2, HIGH);
-    digitalWrite(_cfg.pin_d3, HIGH);
+    // 共阳极：所有位选拉低
+    // 共阴极：所有位选拉高
+    bool off_level = _cfg.common_anode ? LOW : HIGH;
+    digitalWrite(_cfg.pin_d1, off_level);
+    digitalWrite(_cfg.pin_d2, off_level);
+    digitalWrite(_cfg.pin_d3, off_level);
     _writeSegments(SEG_BLANK);
 }
 
