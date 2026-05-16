@@ -39,7 +39,7 @@ struct DirectDisplayConfig {
 
     // 位选 GPIO（共阳极：高电平有效）
     uint8_t pin_d1 = 13;   // 上1: COM1（第1位，百位/最左）
-    uint8_t pin_d2 = 12;   // 上4: COM2（第2位，十位）
+    uint8_t pin_d2 =  5;   // 上4: COM2（第2位，十位）- 改用 GPIO5 避免 GPIO12 啟動問題
     uint8_t pin_d3 =  4;   // 上5: COM3（第3位，个位/最右）
 
     uint16_t rated_rpm     = 100;   // 电机额定空载转速（按齿轮比填写）

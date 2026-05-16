@@ -576,8 +576,9 @@ void setup() {
     cfg.default_ramp_ms  = prefs.getUInt("ramp_ms",   2000);
 
     DirectDisplayConfig dcfg;
-    // 段选、位选引脚使用默认值（见 DirectDisplay.h），如需更改在此覆盖：
-    // dcfg.pin_d2    = 5;      // 若 GPIO12 boot 问题改用 GPIO5
+    // 段选、位选引脚已在 DirectDisplay.h 中配置（pin_d2 已改用 GPIO5）
+    // 如需進一步自定義，可在此覆蓋：
+    // dcfg.pin_d2 = 5;  // 已預設為 GPIO5
     dcfg.rated_rpm = prefs.getUInt("rated_rpm", 100);
     prefs.end();
 
