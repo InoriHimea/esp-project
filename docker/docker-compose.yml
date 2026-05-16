@@ -1,25 +1,165 @@
+# ============================================================================
+# ESP 控制平台 - Docker Compose 配置（Unraid macvlan 網絡）
+# ============================================================================
+# 此配置用於在 Unraid 環境中部署完整的 ESP 控制平台
+# 使用 macvlan 網絡為服務分配獨立 IP 地址
+#
+# 使用方法：
+# 1. 複製 .env.example 為 .env 並配置環境變數
+# 2. 運行：docker compose up -d
+#
+# 注意：此配置引用 esp-server 目錄中的微服務架構
+# ============================================================================
+
 networks:
   unraid_macvlan:
     external: true
     name: ${MACVLAN_NETWORK}
 
 services:
-  esp-server:
-    build: ../esp-server
-    restart: unless-stopped
+  # PostgreSQL 資料庫
+  postgres:
+    image: postgres:18.3-alpine
+    container_name: esp-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-esp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-esp_password}
+      POSTGRES_DB: ${POSTGRES_DB:-esp_platform}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       unraid_macvlan:
-        ipv4_address: ${ESP_SERVER_IP}
-    env_file: .env
+        ipv4_address: ${POSTGRES_IP}
+    restart: unless-stopped
 
+  # MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    container_name: esp-mosquitto
+    volumes:
+      - ../esp-server/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${MOSQUITTO_IP}
+    restart: unless-stopped
+
+  # 認證服務
+  auth-service:
+    build:
+      context: ../esp-server
+      dockerfile: Dockerfile.auth-service
+    container_name: esp-auth-service
+    environment:
+      PORT: 8081
+      DATABASE_URL: postgresql://${POSTGRES_USER:-esp_user}:${POSTGRES_PASSWORD:-esp_password}@${POSTGRES_IP}:5432/${POSTGRES_DB:-esp_platform}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${AUTH_SERVICE_IP}
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # 設備服務
+  device-service:
+    build:
+      context: ../esp-server
+      dockerfile: Dockerfile.device-service
+    container_name: esp-device-service
+    environment:
+      PORT: 8082
+      DATABASE_URL: postgresql://${POSTGRES_USER:-esp_user}:${POSTGRES_PASSWORD:-esp_password}@${POSTGRES_IP}:5432/${POSTGRES_DB:-esp_platform}?sslmode=disable
+      MQTT_SERVICE_URL: http://${MQTT_SERVICE_IP}:8083
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${DEVICE_SERVICE_IP}
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # MQTT 服務
+  mqtt-service:
+    build:
+      context: ../esp-server
+      dockerfile: Dockerfile.mqtt-service
+    container_name: esp-mqtt-service
+    environment:
+      PORT: 8083
+      DATABASE_URL: postgresql://${POSTGRES_USER:-esp_user}:${POSTGRES_PASSWORD:-esp_password}@${POSTGRES_IP}:5432/${POSTGRES_DB:-esp_platform}?sslmode=disable
+      MQTT_BROKER: tcp://${MOSQUITTO_IP}:1883
+      WEBSOCKET_SERVICE_URL: http://${WEBSOCKET_SERVICE_IP}:8084
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${MQTT_SERVICE_IP}
+    depends_on:
+      - postgres
+      - mosquitto
+    restart: unless-stopped
+
+  # WebSocket 服務
+  websocket-service:
+    build:
+      context: ../esp-server
+      dockerfile: Dockerfile.websocket-service
+    container_name: esp-websocket-service
+    environment:
+      PORT: 8084
+      JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${WEBSOCKET_SERVICE_IP}
+    restart: unless-stopped
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ../esp-server
+      dockerfile: Dockerfile.api-gateway
+    container_name: esp-api-gateway
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgresql://${POSTGRES_USER:-esp_user}:${POSTGRES_PASSWORD:-esp_password}@${POSTGRES_IP}:5432/${POSTGRES_DB:-esp_platform}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://${AUTH_SERVICE_IP}:8081
+      DEVICE_SERVICE_URL: http://${DEVICE_SERVICE_IP}:8082
+      MQTT_SERVICE_URL: http://${MQTT_SERVICE_IP}:8083
+      WEBSOCKET_SERVICE_URL: http://${WEBSOCKET_SERVICE_IP}:8084
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+    networks:
+      unraid_macvlan:
+        ipv4_address: ${API_GATEWAY_IP}
+    depends_on:
+      - postgres
+      - auth-service
+      - device-service
+      - mqtt-service
+      - websocket-service
+    restart: unless-stopped
+
+  # 前端 UI
   esp-ui:
     build:
       context: ../esp-ui
       args:
-        VITE_SERVER_API: http://${ESP_SERVER_IP}:3000/api/v1
-        VITE_SERVER_WS: ws://${ESP_SERVER_IP}:3000/ws
-    restart: unless-stopped
+        VITE_SERVER_API: http://${API_GATEWAY_IP}:8080/api/v1
+        VITE_SERVER_WS: ws://${API_GATEWAY_IP}:8080/ws
+    container_name: esp-ui
     networks:
       unraid_macvlan:
         ipv4_address: ${ESP_UI_IP}
-    depends_on: [esp-server]
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_logs:

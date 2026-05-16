@@ -1,9 +1,69 @@
+import { useEffect, useState } from 'react';
 import { useDeviceWs } from '../../ws/useDeviceWs';
+import { apiGet } from '../../api/client';
 import DeviceCard from './DeviceCard';
+import type { DeviceStatus } from '../../ws/useDeviceWs';
+
+interface Device {
+  id: string;
+  device_type: string;
+  last_seen: string;
+  created_at: string;
+}
 
 export default function DashboardPage() {
   const deviceMap = useDeviceWs();
-  const devices = Array.from(deviceMap.entries());
+  const [initialDevices, setInitialDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load initial device list from API
+  useEffect(() => {
+    apiGet<Device[]>('/devices')
+      .then((devices) => {
+        setInitialDevices(devices);
+      })
+      .catch((err) => {
+        console.error('Failed to load devices:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  // Merge initial devices with WebSocket updates
+  const allDeviceIds = new Set([
+    ...initialDevices.map((d) => d.id),
+    ...Array.from(deviceMap.keys()),
+  ]);
+
+  const devices = Array.from(allDeviceIds).map((id) => {
+    const wsStatus = deviceMap.get(id);
+    const initialDevice = initialDevices.find((d) => d.id === id);
+    
+    // Use WebSocket status if available, otherwise create placeholder
+    const status: DeviceStatus = wsStatus || {
+      device_type: initialDevice?.device_type || 'unknown',
+      state: 'stopped',
+      speed: 0,
+      speed_pct: '0.0',
+      direction: 'forward',
+      uptime_ms: 0,
+      ip: '',
+    };
+
+    return [id, status] as [string, DeviceStatus];
+  });
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6">
+        <h1 className="text-xl font-semibold text-white mb-6">设备总览</h1>
+        <div className="flex items-center justify-center py-24 text-gray-500">
+          <p className="text-base">加载中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-6">

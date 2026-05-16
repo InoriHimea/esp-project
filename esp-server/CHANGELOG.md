@@ -5,6 +5,59 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 版本號遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [1.2.0] - 2024-05-15
+
+### 新增
+
+#### 前端集成改進（階段 3）
+- ✨ 更新前端 `.env.example`
+  - 添加平台後端配置（`VITE_SERVER_API`, `VITE_SERVER_WS`）
+  - 明確區分平台模式和 ESP32 直連模式
+  - 添加詳細的配置說明
+- ✨ Dashboard 數據來源統一
+  - 頁面加載時先請求 `GET /devices` 獲取設備列表
+  - WebSocket 後續增量更新設備狀態
+  - 合併初始設備和實時狀態
+  - 添加加載狀態提示
+
+#### Docker 部署改進（階段 4）
+- ✨ 更新根目錄 `docker/docker-compose.yml`
+  - 支持完整的微服務架構
+  - 為 Unraid macvlan 網絡優化
+  - 為每個服務分配獨立 IP 地址
+  - 包含所有 5 個微服務 + 前端 UI
+- ✨ 更新 `docker/.env.example`
+  - 完整的環境變數配置模板
+  - 詳細的配置說明和註釋
+  - 安全配置指南
+- 📚 添加 `docker/README.md`
+  - Unraid macvlan 部署完整指南
+  - 與標準部署的對比說明
+  - 常見問題解答
+  - 網絡架構圖
+- 📚 更新根目錄 `README.md`
+  - 明確兩種 Docker 部署方式
+  - 標準部署（推薦）vs Unraid 部署
+  - 更新鏡像版本號為 v1.1.0
+
+### 改進
+- 📝 統一 Docker 部署文檔
+  - 避免配置漂移
+  - 清晰的使用場景說明
+- 🔧 前端代碼質量
+  - TypeScript 類型安全
+  - 改進的錯誤處理
+  - 更好的用戶體驗
+
+### 技術改進
+- ⚡ 前端性能優化
+  - 減少不必要的 API 請求
+  - 智能合併數據源
+- ⚡ Docker 配置優化
+  - 清晰的服務依賴關係
+  - 完整的健康檢查
+  - 靈活的網絡配置
+
 ## [1.1.0] - 2024-05-15
 
 ### 修復

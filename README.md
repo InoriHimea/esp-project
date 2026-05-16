@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.1.0)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.2.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](esp-server/LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
 
 完整的 ESP32 設備控制平台，包含後端微服務、前端 UI 和 ESP32 韌體。
 
-**當前版本：v1.1.0**
+**當前版本：v1.2.0**
 
 ## 📋 專案概述
 
@@ -160,22 +160,42 @@ esp-project/
 
 ## 🐳 Docker 部署
 
+### 標準部署（推薦）
+
+適用於大多數環境，使用 Docker 內部網絡：
+
+```bash
+cd esp-server
+cp .env.example .env
+# 編輯 .env 設置 JWT_SECRET 等
+docker compose up -d
+```
+
+服務將在以下端口啟動：
+- API Gateway: http://localhost:8080
+- 前端 UI: 需要單獨構建或使用開發模式
+
+### Unraid macvlan 部署
+
+適用於 Unraid 環境，為每個服務分配獨立 IP：
+
+```bash
+cd docker
+cp .env.example .env
+# 編輯 .env 配置 IP 地址和密鑰
+docker compose up -d
+```
+
+詳細配置說明請參閱 `docker/.env.example`。
+
 ### 使用預構建鏡像
 
 ```bash
 # 拉取鏡像
-docker pull ghcr.io/inorihimea/esp-platform-api-gateway:v1.0.0
+docker pull ghcr.io/inorihimea/esp-platform-api-gateway:v1.1.0
 
 # 使用 docker-compose
 cd esp-server
-docker compose up -d
-```
-
-### 構建自己的鏡像
-
-```bash
-cd esp-server
-docker compose build
 docker compose up -d
 ```
 
@@ -264,6 +284,11 @@ npm test
 ```
 
 ## 📝 版本歷史
+
+### v1.2.0 (2024-05-15)
+- 前端集成改進：統一 Dashboard 數據來源
+- Docker 部署優化：支持 Unraid macvlan 網絡
+- 完善部署文檔和配置說明
 
 ### v1.1.0 (2024-05-15)
 - 🐛 修復後端編譯問題
