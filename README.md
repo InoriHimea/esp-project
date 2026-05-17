@@ -134,10 +134,52 @@ esp-project/
 基於 PlatformIO 的 ESP32 韌體實現。
 
 **功能**：
-- MQTT 通訊
-- 馬達控制
-- 狀態上報
-- OTA 更新支援
+- 馬達控制（DRV8871 H 橋 + PWM 速度控制）
+- 3 位共陽極數碼管顯示（RPM / 占空比 / 原始值 三模式輪播）
+- LED 狀態指示（多種閃爍模式對應不同馬達狀態）
+- WiFi 配網（AP 模式 + 設定頁面）
+- MQTT 通訊（與後端平台對接）
+- HTTP API + WebSocket 實時控制
+- **綜合自檢系統**（LED / 數碼管 / 馬達 / GPIO 五類測試）
+
+**硬件構成**：
+| 元件 | 用途 |
+|------|------|
+| ESP32 DevKit | 主控 |
+| DRV8871 | H 橋馬達驅動（24V / 1.5A）|
+| JGB37-520 直流減速馬達 | 24V，可正反轉 |
+| 3 位共陽極數碼管 | 顯示速度/RPM |
+| S8050 + 2N5401 + 速度補償電容 | 數碼管位選高邊驅動（含抗鬼影設計）|
+| 5V 電源去耦電容（100μF + 0.1μF）| 抗 24V 馬達 PWM 干擾 |
+| GPIO 下拉電阻（10kΩ）| 段選/位選邏輯電平穩定 |
+| Mini 560 降壓模塊 | 24V → 5V/3.3V |
+
+**重要硬件文檔**：
+- 📐 [數碼管驅動電路設計與鬼影消除](esp32-motor/docs/display-driver-circuit.md)
+  - 完整電路圖（NPN + PNP 達林頓對管）
+  - **速度補償電容方案**（解決殘影 / 鬼影）
+  - ULN2803 / MIC2981 專用驅動 IC 替代方案說明
+
+**自檢測試**：
+韌體預設開機自動執行完整自檢（LED → 數碼管 → GPIO → 馬達 PWM），約耗時 45 秒。  
+也可以隨時通過 HTTP / MQTT / WebSocket 觸發單項或完整測試：
+
+```bash
+# HTTP 觸發（需要先連接 WiFi）
+curl -X POST http://motorctrl.local/api/test \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"all"}'
+
+# 查詢測試進度
+curl http://motorctrl.local/api/test
+
+# 關閉開機自檢（持久化）
+curl -X POST http://motorctrl.local/api/boot-test \
+  -H 'Content-Type: application/json' \
+  -d '{"enabled":false}'
+```
+
+支援的測試類型：`led` / `display` / `motor` / `gpio` / `all`
 
 ## 🔧 API 端點
 

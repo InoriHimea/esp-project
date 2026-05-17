@@ -101,6 +101,10 @@ void MotorController::_computeRampStep(uint16_t from, uint16_t to, uint32_t ramp
 void MotorController::_applyDuty(uint16_t duty, MotorDirection dir) {
     // Clamp
     duty = min(duty, _cfg.max_speed);
+    
+    // ─── IN/IN 模式（DRV8871 標準模式）─────────────────────────
+    //   正轉：IN1 = PWM, IN2 = 0
+    //   反轉：IN1 = 0,   IN2 = PWM
     if (dir == MotorDirection::FORWARD) {
         ledcWrite(_cfg.ledc_ch_in1, duty);
         ledcWrite(_cfg.ledc_ch_in2, 0);

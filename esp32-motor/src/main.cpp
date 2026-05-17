@@ -32,6 +32,7 @@
 
 #include "MotorController.h"
 #include "DirectDisplay.h"       // ← 替换 DisplayManager
+#include "SelfTest.h"            // ← 綜合自檢模塊
 
 // ─── WiFi ─────────────────────────────────────────────────────────────────────
 // Credentials are stored in NVS (Preferences), never in source code.
@@ -51,6 +52,7 @@ static constexpr uint8_t PIN_LED = 2;
 // ─── Globals ──────────────────────────────────────────────────────────────────
 MotorController motor;
 DirectDisplay   display;         // ← 替换 DisplayManager
+SelfTest        selfTest;        // ← 綜合自檢模塊
 AsyncWebServer  httpServer(80);
 AsyncWebSocket  ws("/ws");
 Preferences     prefs;
@@ -95,6 +97,17 @@ static String buildStatusJson() {
     doc["uptime_ms"]     = millis();
     doc["ip"]            = WiFi.localIP().toString();
     doc["led"]           = (digitalRead(PIN_LED) == HIGH) ? "on" : "off";
+
+    // 自檢測試狀態
+    JsonObject test = doc["test"].to<JsonObject>();
+    test["state"]    = (selfTest.state() == TestState::RUNNING) ? "running"
+                     : (selfTest.state() == TestState::PASSED)  ? "passed"
+                     : (selfTest.state() == TestState::FAILED)  ? "failed"
+                     :                                            "idle";
+    test["type"]     = SelfTest::toString(selfTest.currentType());
+    test["step"]     = selfTest.currentStep();
+    test["progress"] = selfTest.progressPct();
+
     String out;
     serializeJson(doc, out);
     return out;
@@ -158,6 +171,21 @@ static void onMqttMessage(char* topic, byte* payload, unsigned int length) {
         motor.brake();
     } else if (strcmp(cmd, "coast") == 0) {
         motor.coast();
+    } else if (strcmp(cmd, "test") == 0) {
+        // 觸發自檢測試
+        // payload: {"cmd":"test", "type":"led|display|motor|gpio|all"}
+        const char* typeStr = doc["type"] | "all";
+        TestType type = SelfTest::fromString(typeStr);
+        if (type == TestType::NONE) {
+            Serial.printf("[MQTT] invalid test type: %s\n", typeStr);
+            return;
+        }
+        bool ok = selfTest.start(type);
+        Serial.printf("[MQTT] test '%s' start: %s\n", typeStr, ok ? "ok" : "busy");
+    } else if (strcmp(cmd, "display_mode") == 0) {
+        // 切換數碼管顯示模式（RPM → PCT → RAW → RPM…）
+        display.nextMode();
+        Serial.println("[MQTT] display mode switched");
     } else {
         Serial.printf("[MQTT] unknown cmd: %s\n", cmd);
     }
@@ -471,6 +499,80 @@ static void setupRoutes() {
         req->send(res);
     });
 
+    // ─── 自檢測試 API ─────────────────────────────────────────────────────────
+    // GET /api/test  → 返回當前測試狀態
+    httpServer.on("/api/test", HTTP_GET, [](AsyncWebServerRequest* req) {
+        auto* res = req->beginResponse(200, "application/json", selfTest.toJson());
+        addCors(res);
+        req->send(res);
+    });
+
+    // POST /api/test  body={"type":"led|display|motor|gpio|all"}
+    httpServer.on("/api/test", HTTP_POST,
+        [](AsyncWebServerRequest* req) {},
+        nullptr,
+        [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                auto* res = req->beginResponse(400, "application/json",
+                    "{\"error\":\"invalid JSON\"}");
+                addCors(res);
+                req->send(res);
+                return;
+            }
+            String typeStr = doc["type"] | "all";
+            TestType type = SelfTest::fromString(typeStr);
+            if (type == TestType::NONE) {
+                auto* res = req->beginResponse(400, "application/json",
+                    "{\"error\":\"invalid test type. Use led|display|motor|gpio|all\"}");
+                addCors(res);
+                req->send(res);
+                return;
+            }
+            bool ok = selfTest.start(type);
+            String body = "{\"started\":" + String(ok ? "true" : "false") +
+                          ",\"type\":\"" + typeStr + "\"}";
+            auto* res = req->beginResponse(ok ? 202 : 409,
+                "application/json", body);
+            addCors(res);
+            req->send(res);
+        }
+    );
+
+    // POST /api/test/cancel  → 雖然測試是異步的，但我們不直接中斷任務，
+    // 此端點用於提示用戶（測試會自然結束）
+    httpServer.on("/api/test/cancel", HTTP_POST, [](AsyncWebServerRequest* req) {
+        String body = "{\"info\":\"test will finish naturally; no abort supported\"}";
+        auto* res = req->beginResponse(200, "application/json", body);
+        addCors(res);
+        req->send(res);
+    });
+
+    // POST /api/boot-test  body={"enabled":true|false}
+    // 設置開機自檢開關（持久化到 NVS）
+    httpServer.on("/api/boot-test", HTTP_POST,
+        [](AsyncWebServerRequest* req) {},
+        nullptr,
+        [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t, size_t) {
+            JsonDocument doc;
+            if (deserializeJson(doc, data, len)) {
+                auto* res = req->beginResponse(400, "application/json",
+                    "{\"error\":\"invalid JSON\"}");
+                addCors(res);
+                req->send(res);
+                return;
+            }
+            bool enabled = doc["enabled"] | false;
+            prefs.begin("motor", false);
+            prefs.putBool("boot_test", enabled);
+            prefs.end();
+            String body = "{\"boot_test\":" + String(enabled ? "true" : "false") + "}";
+            auto* res = req->beginResponse(200, "application/json", body);
+            addCors(res);
+            req->send(res);
+        }
+    );
+
     // GET /api/wifi — return current SSID (no password)
     httpServer.on("/api/wifi", HTTP_GET, [](AsyncWebServerRequest* req) {
         prefs.begin("wifi", true);
@@ -549,6 +651,16 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client,
                 else if (strcmp(cmd, "stop")  == 0) motor.stop();
                 else if (strcmp(cmd, "brake") == 0) motor.brake();
                 else if (strcmp(cmd, "coast") == 0) motor.coast();
+                else if (strcmp(cmd, "test")  == 0) {
+                    const char* typeStr = doc["type"] | "all";
+                    TestType type = SelfTest::fromString(typeStr);
+                    if (type != TestType::NONE) {
+                        selfTest.start(type);
+                    }
+                }
+                else if (strcmp(cmd, "display_mode") == 0) {
+                    display.nextMode();
+                }
             }
         }
     }
@@ -559,7 +671,10 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client,
 // ─────────────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
-    Serial.println("\n[Boot] ESP32 Motor Controller v1.1.0");
+    delay(100);  // 等待串口穩定
+    Serial.println("\n\n========================================");
+    Serial.println("[Boot] ESP32 Motor Controller v1.2.0");
+    Serial.println("========================================");
 
     if (!LittleFS.begin(true)) {
         Serial.println("[LittleFS] mount failed!");
@@ -576,20 +691,27 @@ void setup() {
     cfg.default_ramp_ms  = prefs.getUInt("ramp_ms",   2000);
 
     DirectDisplayConfig dcfg;
-    // 段选、位选引脚已在 DirectDisplay.h 中配置（pin_d2 已改用 GPIO5）
-    // 如需進一步自定義，可在此覆蓋：
-    // dcfg.pin_d2 = 5;  // 已預設為 GPIO5
     dcfg.rated_rpm = prefs.getUInt("rated_rpm", 100);
+
+    bool boot_self_test = prefs.getBool("boot_test", true);  // 預設啟用開機自檢
     prefs.end();
 
     motor   = MotorController(cfg);
     display = DirectDisplay(dcfg);
     motor.begin();
-    display.begin();                    // ← 新增
+    display.begin();
 
     // LED 初始化
     pinMode(PIN_LED, OUTPUT);
-    digitalWrite(PIN_LED, LOW);         // 上電預設滅
+    digitalWrite(PIN_LED, LOW);
+
+    // SelfTest 初始化
+    SelfTestConfig stcfg;
+    stcfg.pin_led = PIN_LED;
+    stcfg.pin_in1 = PIN_IN1;
+    stcfg.pin_in2 = PIN_IN2;
+    selfTest = SelfTest(stcfg);
+    selfTest.attach(&motor, &display);
 
     // ── WiFi ──────────────────────────────────────────────────────────────────
     prefs.begin("wifi", true);
@@ -632,6 +754,16 @@ void setup() {
     setupRoutes();
     httpServer.begin();
     Serial.println("[HTTP] server started on port 80");
+
+    // ── 開機自檢（可選，由 NVS 配置控制）──────────────────────────────────────
+    if (boot_self_test) {
+        Serial.println("[Boot] Running boot self-test (boot_test=true)");
+        selfTest.start(TestType::ALL);
+    } else {
+        Serial.println("[Boot] Boot self-test disabled. Trigger via:");
+        Serial.println("  HTTP:  POST /api/test  body={\"type\":\"all\"}");
+        Serial.println("  MQTT:  esp/devices/<id>/command  payload={\"cmd\":\"test\",\"type\":\"all\"}");
+    }
 }
 
 void loop() {
@@ -643,7 +775,13 @@ void loop() {
     uint32_t now = millis();
 
     // ── LED 指示燈 ────────────────────────────────────────────────────────────
+    // 注意：自檢測試運行時，由 SelfTest 任務直接控制 LED，loop 不干擾
     uint32_t blinkPeriod = 0;   // 0 = 不閃爍（由各 case 直接控制輸出）
+
+    if (selfTest.isRunning()) {
+        // 測試進行中，跳過 LED 狀態更新（測試任務會控制 LED）
+        goto skip_led_update;
+    }
 
     switch (motor.state()) {
         case MotorState::RUNNING:
@@ -675,6 +813,8 @@ void loop() {
         digitalWrite(PIN_LED, ledState ? HIGH : LOW);
     }
 
+skip_led_update:
+
     if (now - lastBroadcast >= WS_BROADCAST_INTERVAL) {
         lastBroadcast = now;
         broadcastStatus();
@@ -683,11 +823,14 @@ void loop() {
 
     if (now - lastDisplayTick >= 50) {
         lastDisplayTick = now;
-        bool stopped = (motor.state() == MotorState::STOPPED
-                     || motor.state() == MotorState::COASTING);
-        display.update(motor.currentSpeed(),
-                       motor.config().max_speed,
-                       stopped);
+        // 測試運行時，由測試任務直接控制 display
+        if (!selfTest.isRunning()) {
+            bool stopped = (motor.state() == MotorState::STOPPED
+                         || motor.state() == MotorState::COASTING);
+            display.update(motor.currentSpeed(),
+                           motor.config().max_speed,
+                           stopped);
+        }
     }
 
     // MQTT: process incoming messages

@@ -30,7 +30,7 @@ struct MotorConfig {
     uint8_t  pin_in2        = 19;      // GPIO for DRV8871 IN2
     uint8_t  ledc_ch_in1    = 0;       // LEDC channel for IN1
     uint8_t  ledc_ch_in2    = 1;       // LEDC channel for IN2
-    uint32_t pwm_freq_hz    = 20000;   // 20 kHz — above audible range
+    uint32_t pwm_freq_hz    = 1000;    // 1 kHz — DRV8871 推薦範圍內，更穩定
     uint8_t  pwm_resolution = 10;      // bits (0–1023)
     uint16_t max_speed      = 1023;    // max duty cycle (100 %)
     uint16_t min_speed      = 0;       // minimum moving speed

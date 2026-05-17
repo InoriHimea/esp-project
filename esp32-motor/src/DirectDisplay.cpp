@@ -40,24 +40,60 @@ void DirectDisplay::begin() {
     }
 
     // 配置位选引脚为输出
-    // 共阳极：初始低电平（位灭），高电平有效
-    // 共阴极：初始高电平（位灭），低电平有效
+    // 直接驅動共阳极：初始低电平（位灭），高电平有效
+    // 直接驅動共阴极：初始高电平（位灭），低电平有效
+    // PNP 高邊驅動：初始低电平（截止），高电平導通
     const uint8_t digs[3] = {_cfg.pin_d1, _cfg.pin_d2, _cfg.pin_d3};
+    bool init_level;
+    if (_cfg.invert_digit_select) {
+        init_level = LOW;  // PNP 高邊驅動：LOW 截止
+    } else {
+        init_level = _cfg.common_anode ? LOW : HIGH;
+    }
     for (uint8_t p : digs) {
         pinMode(p, OUTPUT);
-        digitalWrite(p, _cfg.common_anode ? LOW : HIGH);
+        digitalWrite(p, init_level);
     }
 
-    // 开机动画：从左到右依次点亮横杠
-    for (int i = 0; i < 3; i++) {
-        xSemaphoreTake(_mutex, portMAX_DELAY);
-        _digits[0] = (i >= 0) ? SEG_DASH : SEG_BLANK;
-        _digits[1] = (i >= 1) ? SEG_DASH : SEG_BLANK;
-        _digits[2] = (i >= 2) ? SEG_DASH : SEG_BLANK;
-        xSemaphoreGive(_mutex);
-        delay(120);
-    }
-    delay(300);
+    // 开机动画：测试每一位
+    Serial.println("[Display] Testing each digit separately...");
+    
+    // 測試 D1 (GPIO13)
+    Serial.println("  Testing D1 (百位, GPIO13) - should show '8'");
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _digits[0] = DIGIT_MAP[8];
+    _digits[1] = SEG_BLANK;
+    _digits[2] = SEG_BLANK;
+    xSemaphoreGive(_mutex);
+    delay(1000);
+    
+    // 測試 D2 (GPIO5)
+    Serial.println("  Testing D2 (十位, GPIO5) - should show '8'");
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _digits[0] = SEG_BLANK;
+    _digits[1] = DIGIT_MAP[8];
+    _digits[2] = SEG_BLANK;
+    xSemaphoreGive(_mutex);
+    delay(1000);
+    
+    // 測試 D3 (GPIO4)
+    Serial.println("  Testing D3 (個位, GPIO4) - should show '8'");
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _digits[0] = SEG_BLANK;
+    _digits[1] = SEG_BLANK;
+    _digits[2] = DIGIT_MAP[8];
+    xSemaphoreGive(_mutex);
+    delay(1000);
+    
+    // 測試所有位一起
+    Serial.println("  Testing all digits - should show '888'");
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _digits[0] = DIGIT_MAP[8];
+    _digits[1] = DIGIT_MAP[8];
+    _digits[2] = DIGIT_MAP[8];
+    xSemaphoreGive(_mutex);
+    delay(1000);
+    
     _setBlank();
 
     // 启动扫描任务（独立核心，高优先级，确保显示不抖动）
@@ -71,8 +107,17 @@ void DirectDisplay::begin() {
         1          // core 1
     );
 
-    Serial.printf("[Display] begin() type=%s segs=23/25/26/27/32/33/14 coms=13/12/4 rated=%uRPM\n",
+    Serial.printf("[Display] begin() type=%s segs=23/25/26/27/32/33/14 coms=13/5/4 rated=%uRPM\n",
                   _cfg.common_anode ? "CA" : "CC", _cfg.rated_rpm);
+
+    // 簡短開機動畫：888 → blank
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    _digits[0] = DIGIT_MAP[8];
+    _digits[1] = DIGIT_MAP[8];
+    _digits[2] = DIGIT_MAP[8];
+    xSemaphoreGive(_mutex);
+    delay(800);
+    _setBlank();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -169,23 +214,34 @@ void DirectDisplay::_writeSegments(uint8_t s) {
 }
 
 void DirectDisplay::_selectDigit(uint8_t idx) {
-    // 共阳极：拉高对应位选，其余拉低
-    // 共阴极：拉低对应位选，其余拉高
-    if (_cfg.common_anode) {
-        digitalWrite(_cfg.pin_d1, idx == 0);
-        digitalWrite(_cfg.pin_d2, idx == 1);
-        digitalWrite(_cfg.pin_d3, idx == 2);
+    // 位選邏輯：
+    // - 直接驅動共陽極：HIGH 有效，LOW 無效
+    // - 直接驅動共陰極：LOW 有效，HIGH 無效
+    // - PNP 高邊驅動：HIGH 導通（有效），LOW 截止（無效）
+
+    bool active_level;
+    if (_cfg.invert_digit_select) {
+        active_level = true;
     } else {
-        digitalWrite(_cfg.pin_d1, idx != 0);
-        digitalWrite(_cfg.pin_d2, idx != 1);
-        digitalWrite(_cfg.pin_d3, idx != 2);
+        active_level = _cfg.common_anode ? true : false;
     }
+
+    digitalWrite(_cfg.pin_d1, (idx == 0) == active_level);
+    digitalWrite(_cfg.pin_d2, (idx == 1) == active_level);
+    digitalWrite(_cfg.pin_d3, (idx == 2) == active_level);
 }
 
 void DirectDisplay::_deselectAll() {
-    // 共阳极：所有位选拉低
-    // 共阴极：所有位选拉高
-    bool off_level = _cfg.common_anode ? LOW : HIGH;
+    // 關閉所有位選
+    bool off_level;
+    if (_cfg.invert_digit_select) {
+        // PNP 高邊驅動：LOW 截止
+        off_level = LOW;
+    } else {
+        // 直接驅動：共陽極 LOW 關閉，共陰極 HIGH 關閉
+        off_level = _cfg.common_anode ? LOW : HIGH;
+    }
+    
     digitalWrite(_cfg.pin_d1, off_level);
     digitalWrite(_cfg.pin_d2, off_level);
     digitalWrite(_cfg.pin_d3, off_level);
@@ -193,21 +249,33 @@ void DirectDisplay::_deselectAll() {
 }
 
 // ─── FreeRTOS 扫描任务 ────────────────────────────────────────────────────────
-//  每位显示 1ms，三位轮换 → 刷新率 ~333Hz
+//  每位显示 2ms（增加亮度），三位轮换 → 刷新率 ~166Hz
 //  关键：切换位之前必须先关段，再切位，再开段，防止"鬼影"（ghost）
+//
+//  鬼影抑制策略：
+//    1. 先寫入「本位段碼為全滅」並 deselect（消隱期）
+//    2. 等待 200μs 讓 PNP 高邊驅動充分截止（10kΩ × 寄生電容）
+//    3. 寫入本位段碼，然後 select 該位
+//    4. 顯示 2ms 後進入下一輪
 void DirectDisplay::_scanTick() {
     for (uint8_t i = 0; i < 3; i++) {
         xSemaphoreTake(_mutex, portMAX_DELAY);
         uint8_t seg = _digits[i];
         xSemaphoreGive(_mutex);
 
-        _deselectAll();          // 1. 所有段清零 + 所有位关断
-        _writeSegments(seg);     // 2. 写入本位段码
-        _selectDigit(i);         // 3. 打开本位
-
-        vTaskDelay(pdMS_TO_TICKS(1));   // 亮 1ms
+        // 1. 消隱期：所有段關閉 + 所有位關斷
+        _deselectAll();
+        // 2. 等待 PNP 高邊驅動充分截止（防止鬼影）
+        delayMicroseconds(200);
+        // 3. 寫入本位段碼
+        _writeSegments(seg);
+        // 4. 打開本位（PNP 導通）
+        _selectDigit(i);
+        // 5. 顯示時間
+        vTaskDelay(pdMS_TO_TICKS(2));
     }
     _deselectAll();              // 循环结束时关断，防止最后一位残留
+    delayMicroseconds(200);      // 確保最後一位也充分關斷
 }
 
 void DirectDisplay::_scanTaskFn(void* param) {

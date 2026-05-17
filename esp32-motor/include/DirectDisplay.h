@@ -45,7 +45,8 @@ struct DirectDisplayConfig {
     uint16_t rated_rpm     = 100;   // 电机额定空载转速（按齿轮比填写）
     uint32_t mode_cycle_ms = 3000;  // 自动切换模式间隔
     
-    bool common_anode = true;       // true=共阳极，false=共阴极
+    bool common_anode = true;        // true=共阳极，false=共阴极（段選邏輯）
+    bool invert_digit_select = true; // true=位選邏輯反轉（用於 PNP 高邊驅動）
 };
 
 class DirectDisplay {
