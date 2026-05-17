@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.2.0)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.3.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](esp-server/LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
 
 完整的 ESP32 設備控制平台，包含後端微服務、前端 UI 和 ESP32 韌體。
 
-**當前版本：v1.2.0**
+**當前版本：v1.3.0**
 
 ## 📋 專案概述
 
@@ -326,6 +326,14 @@ npm test
 ```
 
 ## 📝 版本歷史
+
+### v1.3.0 (2024-05-17)
+- ✨ ESP32 韌體新增 SelfTest 綜合自檢系統
+- 🔧 DRV8871 PWM 頻率從 20kHz 降至 1kHz（修復馬達不轉）
+- 🔧 GPIO12 改為 GPIO5（避免啟動問題）
+- 📚 新增完整硬件設計文檔（暖菜旋轉盤方案）
+- 📚 新增數碼管驅動電路設計文檔
+- 📚 新增 esp32-motor/README.md 韌體使用指南
 
 ### v1.2.0 (2024-05-15)
 - 前端集成改進：統一 Dashboard 數據來源
