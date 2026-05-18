@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](esp-server/LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
 
 完整的 ESP32 設備控制平台，包含後端微服務、前端 UI 和 ESP32 韌體。
 
-**當前版本：v1.3.0**
+**當前版本：v1.4.0**
 
 ## 📋 專案概述
 
