@@ -383,7 +383,7 @@ static void setupRoutes() {
 
     // GET / — WiFi config portal (useful in AP mode)
     httpServer.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {
-        req->send_P(200, "text/html", WIFI_PORTAL_HTML);
+        req->send(200, "text/html", WIFI_PORTAL_HTML);
     });
 
     // GET /api/status

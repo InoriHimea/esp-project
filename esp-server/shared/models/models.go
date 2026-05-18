@@ -40,8 +40,8 @@ type LoginResponse struct {
 	ExpiresIn int    `json:"expiresIn"`
 }
 
-// CommandRequest 設備命令請求
-type CommandRequest struct {
+// MotorCommandRequest 代表馬達設備命令請求
+type MotorCommandRequest struct {
 	Cmd       string  `json:"cmd" validate:"required,oneof=run stop brake coast"`
 	Speed     *int    `json:"speed,omitempty"`
 	Direction *string `json:"direction,omitempty"`

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/eclipse/paho.mqtt.golang" 
+	"github.com/eclipse/paho.mqtt.golang"
 	"github.com/inorihimea/esp-platform/shared/config"
 	"github.com/inorihimea/esp-platform/shared/database"
 	"github.com/inorihimea/esp-platform/shared/logger"
@@ -19,6 +20,8 @@ import (
 )
 
 var mqttClient mqtt.Client
+
+const maxCommandPayloadBytes = 16 * 1024
 
 func main() {
 	logger.Init("device-service")
@@ -186,7 +189,7 @@ func handleDeviceRoutes(db *database.DB) http.HandlerFunc {
 		// 解析路徑：/devices/{id}/{action}
 		path := strings.TrimPrefix(r.URL.Path, "/devices/")
 		parts := strings.Split(path, "/")
-		
+
 		if len(parts) < 1 || parts[0] == "" {
 			http.Error(w, "Device ID required", http.StatusBadRequest)
 			return
@@ -286,8 +289,17 @@ func handleSendCommand(db *database.DB, deviceID string) http.HandlerFunc {
 			return
 		}
 
-		var cmd models.CommandRequest
-		if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
+		payload, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxCommandPayloadBytes))
+		if err != nil {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error: "payload_too_large",
+			})
+			return
+		}
+
+		var cmd map[string]interface{}
+		if err := json.Unmarshal(payload, &cmd); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(models.ErrorResponse{
 				Error: "invalid_json",
@@ -295,10 +307,18 @@ func handleSendCommand(db *database.DB, deviceID string) http.HandlerFunc {
 			return
 		}
 
+		cmdName, ok := cmd["cmd"].(string)
+		if !ok || strings.TrimSpace(cmdName) == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(models.ErrorResponse{
+				Error:   "invalid_command",
+				Message: "cmd must be a non-empty string",
+			})
+			return
+		}
+
 		// 發送 MQTT 命令
 		topic := "esp/devices/" + deviceID + "/command"
-		payload, _ := json.Marshal(cmd)
-
 		if token := mqttClient.Publish(topic, 0, false, payload); token.Wait() && token.Error() != nil {
 			logger.Error("Failed to publish command", "error", token.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -308,7 +328,7 @@ func handleSendCommand(db *database.DB, deviceID string) http.HandlerFunc {
 			return
 		}
 
-		logger.Info("Command sent", "device_id", deviceID, "cmd", cmd.Cmd)
+		logger.Info("Command sent", "device_id", deviceID, "cmd", cmdName)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{

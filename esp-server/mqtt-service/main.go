@@ -161,15 +161,26 @@ func handleDeviceStatus(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	deviceType := stringValue(status["device_type"])
+	if deviceType == "" {
+		deviceType = stringValue(status["type"])
+	}
+	if deviceType == "" {
+		deviceType = "unknown"
+	}
+	ip := stringValue(status["ip"])
+
 	// 更新設備狀態
 	statusJSON, _ := json.Marshal(status)
 	_, err := db.Exec(`
-		INSERT INTO devices (id, type, last_seen, last_status)
-		VALUES ($1, $2, NOW(), $3)
+		INSERT INTO devices (id, type, ip, last_seen, last_status)
+		VALUES ($1, $2, NULLIF($3, ''), NOW(), $4)
 		ON CONFLICT (id) DO UPDATE SET
+			type = EXCLUDED.type,
+			ip = COALESCE(EXCLUDED.ip, devices.ip),
 			last_seen = NOW(),
-			last_status = $3
-	`, deviceID, status["device_type"], statusJSON)
+			last_status = EXCLUDED.last_status
+	`, deviceID, deviceType, ip, statusJSON)
 
 	if err != nil {
 		logger.Error("Failed to update device status", "error", err, "device_id", deviceID)
@@ -187,6 +198,13 @@ func handleDeviceStatus(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	logger.Info("Device status updated", "device_id", deviceID)
+}
+
+func stringValue(value interface{}) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
 }
 
 func extractDeviceIDFromTopic(topic string) string {

@@ -71,6 +71,7 @@ services:
     environment:
       PORT: 8082
       DATABASE_URL: postgresql://${POSTGRES_USER:-esp_user}:${POSTGRES_PASSWORD:-esp_password}@${POSTGRES_IP}:5432/${POSTGRES_DB:-esp_platform}?sslmode=disable
+      MQTT_BROKER: tcp://${MOSQUITTO_IP}:1883
       MQTT_SERVICE_URL: http://${MQTT_SERVICE_IP}:8083
       INTERNAL_TOKEN: ${INTERNAL_TOKEN}
     networks:
@@ -78,6 +79,7 @@ services:
         ipv4_address: ${DEVICE_SERVICE_IP}
     depends_on:
       - postgres
+      - mosquitto
     restart: unless-stopped
 
   # MQTT 服務
@@ -109,10 +111,13 @@ services:
     environment:
       PORT: 8084
       JWT_SECRET: ${JWT_SECRET}
+      MQTT_BROKER: tcp://${MOSQUITTO_IP}:1883
       INTERNAL_TOKEN: ${INTERNAL_TOKEN}
     networks:
       unraid_macvlan:
         ipv4_address: ${WEBSOCKET_SERVICE_IP}
+    depends_on:
+      - mosquitto
     restart: unless-stopped
 
   # API Gateway

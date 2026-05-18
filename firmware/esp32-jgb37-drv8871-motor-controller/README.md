@@ -1,4 +1,4 @@
-# ESP32 馬達控制器韌體
+# ESP32 JGB37 DRV8871 馬達控制器韌體
 
 基於 PlatformIO 的 ESP32 馬達控制器，支援 WiFi / MQTT / HTTP / WebSocket 多協議控制。
 
@@ -159,7 +159,7 @@ Body: {"enabled":true|false}
 ## 📚 模塊結構
 
 ```
-esp32-motor/
+firmware/esp32-jgb37-drv8871-motor-controller/
 ├── include/
 │   ├── MotorController.h    # 馬達控制器（DRV8871 + LEDC PWM）
 │   ├── DirectDisplay.h      # 直驅數碼管（FreeRTOS 動態掃描）
@@ -172,13 +172,17 @@ esp32-motor/
 ├── docs/
 │   └── display-driver-circuit.md   # 數碼管驅動電路文檔
 ├── data/                    # LittleFS 內容（HTML/JS/CSS）
+├── BOM.md
+├── bom.csv
 ├── platformio.ini
 └── README.md
 ```
 
 ## 🔗 相關文檔
 
+- [BOM 清單](BOM.md)
 - [數碼管驅動電路設計](docs/display-driver-circuit.md)
-- [專案根 README](../README.md)
-- [後端微服務](../esp-server/README.md)
-- [前端 UI](../esp-ui/README.md)
+- [韌體專案索引](../README.md)
+- [專案根 README](../../README.md)
+- [後端微服務](../../esp-server/README.md)
+- [前端 UI](../../esp-ui/README.md)

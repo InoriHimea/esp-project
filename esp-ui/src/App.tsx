@@ -4,6 +4,7 @@ import AuthGuard from './auth/AuthGuard';
 import Shell from './layout/Shell';
 import DashboardPage from './modules/dashboard/DashboardPage';
 import MotorPage from './modules/motor/MotorPage';
+import EpaperPage from './modules/epaper/EpaperPage';
 import DebugPage from './modules/debug/DebugPage';
 import SettingsPage from './modules/settings/SettingsPage';
 
@@ -14,6 +15,7 @@ export default function App() {
       <Route element={<AuthGuard><Shell /></AuthGuard>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/motor/:deviceId" element={<MotorPage />} />
+        <Route path="/epaper/:deviceId" element={<EpaperPage />} />
         <Route path="/debug/:deviceId" element={<DebugPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

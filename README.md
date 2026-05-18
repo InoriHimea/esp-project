@@ -36,7 +36,9 @@ esp-project/
 │   ├── websocket-service/ # WebSocket 服務
 │   └── shared/          # 共享套件
 ├── esp-ui/              # React 前端應用
-├── esp32-motor/         # ESP32 韌體（PlatformIO）
+├── firmware/            # ESP32 韌體（PlatformIO）
+│   ├── esp32-jgb37-drv8871-motor-controller/
+│   └── esp32-epaper-display/
 └── docker/              # Docker 配置
 ```
 
@@ -85,7 +87,7 @@ esp-project/
 
 - [後端開發指南](esp-server/README.md)
 - [前端開發指南](esp-ui/README.md)
-- [ESP32 韌體開發](esp32-motor/README.md)
+- [ESP32 韌體開發](firmware/README.md)
 
 ## 📦 專案組件
 
@@ -129,9 +131,9 @@ esp-project/
 - 歷史記錄查詢
 - 響應式設計
 
-### ESP32 韌體 (esp32-motor/)
+### ESP32 韌體 (firmware/)
 
-基於 PlatformIO 的 ESP32 韌體實現。
+基於 PlatformIO 的 ESP32 韌體實現，包含電機控制器與電子墨水屏控制器。
 
 **功能**：
 - 馬達控制（DRV8871 H 橋 + PWM 速度控制）
@@ -155,7 +157,9 @@ esp-project/
 | Mini 560 降壓模塊 | 24V → 5V/3.3V |
 
 **重要硬件文檔**：
-- 📐 [數碼管驅動電路設計與鬼影消除](esp32-motor/docs/display-driver-circuit.md)
+- 📐 [數碼管驅動電路設計與鬼影消除](firmware/esp32-jgb37-drv8871-motor-controller/docs/display-driver-circuit.md)
+- 📋 [馬達控制器 BOM](firmware/esp32-jgb37-drv8871-motor-controller/BOM.md)
+- 📋 [電子墨水屏 BOM](firmware/esp32-epaper-display/BOM.md)
   - 完整電路圖（NPN + PNP 達林頓對管）
   - **速度補償電容方案**（解決殘影 / 鬼影）
   - ULN2803 / MIC2981 專用驅動 IC 替代方案說明
@@ -333,7 +337,7 @@ npm test
 - 🔧 GPIO12 改為 GPIO5（避免啟動問題）
 - 📚 新增完整硬件設計文檔（暖菜旋轉盤方案）
 - 📚 新增數碼管驅動電路設計文檔
-- 📚 新增 esp32-motor/README.md 韌體使用指南
+- 📚 新增 ESP32 馬達控制器韌體使用指南
 
 ### v1.2.0 (2024-05-15)
 - 前端集成改進：統一 Dashboard 數據來源

@@ -1,18 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { getToken } from "../auth/tokenStore";
-
-export interface DeviceStatus {
-  device_type: string;
-  state: "running" | "stopped" | "braking" | "coasting";
-  speed: number;
-  speed_pct: string;
-  direction: "forward" | "backward";
-  uptime_ms: number;
-  ip: string;
-}
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { getToken } from '../auth/tokenStore';
+import type { DeviceStatus } from '../types/devices';
 
 interface WsStatusMessage {
-  type: "status";
+  type: 'status';
   device_id: string;
   payload: DeviceStatus;
 }
@@ -20,9 +11,7 @@ interface WsStatusMessage {
 const RECONNECT_DELAY = 3000;
 
 export function useDeviceWs(): Map<string, DeviceStatus> {
-  const [deviceMap, setDeviceMap] = useState<Map<string, DeviceStatus>>(
-    new Map()
-  );
+  const [deviceMap, setDeviceMap] = useState<Map<string, DeviceStatus>>(new Map());
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -42,7 +31,7 @@ export function useDeviceWs(): Map<string, DeviceStatus> {
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data as string) as WsStatusMessage;
-        if (msg.type === "status" && msg.device_id && msg.payload) {
+        if (msg.type === 'status' && msg.device_id && msg.payload) {
           setDeviceMap((prev) => {
             const next = new Map(prev);
             next.set(msg.device_id, msg.payload);
@@ -81,3 +70,5 @@ export function useDeviceWs(): Map<string, DeviceStatus> {
 
   return deviceMap;
 }
+
+export type { DeviceStatus } from '../types/devices';

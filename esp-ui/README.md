@@ -30,21 +30,18 @@
 # 1. 安装 PlatformIO CLI
 pip install platformio
 
-# 2. 修改 WiFi 凭证
-# 编辑 src/main.cpp 第 30–31 行:
-#   static const char* WIFI_SSID = "YOUR_SSID";
-#   static const char* WIFI_PASS = "YOUR_PASSWORD";
-
-# 3. 烧录
-cd esp32_motor
+# 2. 烧录马达控制器固件
+cd ../firmware/esp32-jgb37-drv8871-motor-controller
 pio run --target upload
 
-# 4. 查看串口
+# 3. 查看串口
 pio device monitor
 # 输出示例:
 # [WiFi] connected → http://motorctrl.local  192.168.1.100
 # [HTTP] server started on port 80
 ```
+
+WiFi 和 MQTT 通过设备首次启动后的 AP 配网页配置，不再需要在源码中写入 WiFi 密码。
 
 ### WiFi 连不上时 (AP 模式自动启动)
 设备会自动开启热点：  
@@ -106,7 +103,7 @@ WebSocket: `ws://<ip>/ws` — 100 ms 广播，详见 `MOBILE_API.md`
 │    ├─ HTTP :80  REST API                         │
 │    └─ WS   /ws  实时广播 (100ms)                 │
 │                                                  │
-│  LEDC PWM — 20kHz / 10-bit                      │
+│  LEDC PWM — 1kHz / 10-bit                       │
 │    ├─ CH0 → GPIO18 → DRV8871 IN1               │
 │    └─ CH1 → GPIO19 → DRV8871 IN2               │
 │                                                  │

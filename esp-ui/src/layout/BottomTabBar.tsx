@@ -1,11 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Cpu, Bug, Settings } from 'lucide-react';
+import { LayoutDashboard, Settings } from 'lucide-react';
 
 const navItems = [
-  { to: '/',               label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/motor/motor-01', label: 'Motor',     icon: Cpu },
-  { to: '/debug/motor-01', label: 'Debug',     icon: Bug },
-  { to: '/settings',       label: 'Settings',  icon: Settings },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function BottomTabBar() {

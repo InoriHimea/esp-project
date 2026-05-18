@@ -1,24 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useDeviceWs } from '../../ws/useDeviceWs';
-import { apiGet } from '../../api/client';
+import { getDevices } from '../../api/devices';
 import DeviceCard from './DeviceCard';
-import type { DeviceStatus } from '../../ws/useDeviceWs';
+import type { DeviceRecord, DeviceStatus } from '../../types/devices';
+import { statusDeviceType } from '../../types/devices';
 
-interface Device {
-  id: string;
-  device_type: string;
-  last_seen: string;
-  created_at: string;
+function createPlaceholderStatus(device?: DeviceRecord): DeviceStatus {
+  const status = device?.last_status ?? {};
+  const deviceType = statusDeviceType(status) !== 'unknown' ? statusDeviceType(status) : statusDeviceType({ device_type: device?.type });
+
+  return {
+    ...status,
+    device_type: deviceType,
+    ip: status.ip ?? device?.ip ?? '',
+    uptime_ms: status.uptime_ms ?? 0,
+  };
 }
 
 export default function DashboardPage() {
   const deviceMap = useDeviceWs();
-  const [initialDevices, setInitialDevices] = useState<Device[]>([]);
+  const [initialDevices, setInitialDevices] = useState<DeviceRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load initial device list from API
   useEffect(() => {
-    apiGet<Device[]>('/devices')
+    getDevices()
       .then((devices) => {
         setInitialDevices(devices);
       })
@@ -30,7 +35,6 @@ export default function DashboardPage() {
       });
   }, []);
 
-  // Merge initial devices with WebSocket updates
   const allDeviceIds = new Set([
     ...initialDevices.map((d) => d.id),
     ...Array.from(deviceMap.keys()),
@@ -39,17 +43,7 @@ export default function DashboardPage() {
   const devices = Array.from(allDeviceIds).map((id) => {
     const wsStatus = deviceMap.get(id);
     const initialDevice = initialDevices.find((d) => d.id === id);
-    
-    // Use WebSocket status if available, otherwise create placeholder
-    const status: DeviceStatus = wsStatus || {
-      device_type: initialDevice?.device_type || 'unknown',
-      state: 'stopped',
-      speed: 0,
-      speed_pct: '0.0',
-      direction: 'forward',
-      uptime_ms: 0,
-      ip: '',
-    };
+    const status = wsStatus || createPlaceholderStatus(initialDevice);
 
     return [id, status] as [string, DeviceStatus];
   });

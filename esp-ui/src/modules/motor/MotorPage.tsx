@@ -1,36 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { useDeviceWs, type DeviceStatus } from '../../ws/useDeviceWs';
-import { apiPost } from '../../api/client';
+import { useDeviceWs } from '../../ws/useDeviceWs';
+import { sendDeviceCommand } from '../../api/devices';
+import { normalizeMotorDirection, normalizeMotorState, numberValue, stringValue } from '../../types/devices';
 import { SpeedGauge } from '../../components/SpeedGauge';
 import { MotorWheel } from '../../components/MotorWheel';
 import { ConfigPanel } from '../../components/ConfigPanel';
 import type { MotorState, MotorDirection } from '../../lib/api';
-
-// ─── Type adapters ────────────────────────────────────────────────────────────
-// DeviceStatus uses "running"|"stopped"|"braking"|"coasting"
-// MotorState adds "ramping" — map accordingly
-function toMotorState(state: DeviceStatus['state']): MotorState {
-  const map: Record<DeviceStatus['state'], MotorState> = {
-    running:  'running',
-    stopped:  'stopped',
-    braking:  'braking',
-    coasting: 'coasting',
-  };
-  return map[state] ?? 'stopped';
-}
-
-function toMotorDirection(dir: DeviceStatus['direction']): MotorDirection {
-  return dir === 'backward' ? 'reverse' : 'forward';
-}
-
-// ─── Command payload ──────────────────────────────────────────────────────────
-interface CommandPayload {
-  cmd: 'run' | 'stop' | 'brake' | 'coast';
-  speed?: number;
-  direction?: 'forward' | 'backward';
-  ramp_ms?: number;
-}
 
 // ─── Default config (local state, no separate config endpoint via server) ─────
 const DEFAULT_MAX_SPEED = 1023;
@@ -45,16 +21,16 @@ export default function MotorPage() {
   const [maxSpeed, setMaxSpeed] = useState(DEFAULT_MAX_SPEED);
   const [rampMs,   setRampMs]   = useState(DEFAULT_RAMP_MS);
   const [speed,    setSpeed]    = useState(512);
-  const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
+  const [direction, setDirection] = useState<MotorDirection>('forward');
   const [sending,  setSending]  = useState(false);
   const [error,    setError]    = useState<string | null>(null);
 
-  const sendCommand = useCallback(async (payload: CommandPayload) => {
+  const sendCommand = useCallback(async (payload: { cmd: 'run' | 'stop' | 'brake' | 'coast'; speed?: number; direction?: MotorDirection; ramp_ms?: number }) => {
     if (!deviceId) return;
     setSending(true);
     setError(null);
     try {
-      await apiPost(`/devices/${deviceId}/command`, payload);
+      await sendDeviceCommand(deviceId, payload);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Command failed');
     } finally {
@@ -70,12 +46,13 @@ export default function MotorPage() {
   const handleCoast = () => sendCommand({ cmd: 'coast' });
 
   // Derive display values from live status or fall back to local state
-  const displayState     = status ? toMotorState(status.state) : 'stopped';
-  const displayDirection = status ? toMotorDirection(status.direction) : (direction === 'backward' ? 'reverse' : 'forward');
-  const displaySpeed     = status?.speed ?? 0;
-  const displaySpeedPct  = status ? parseFloat(status.speed_pct) : 0;
-  const displayUptime    = status?.uptime_ms ?? 0;
-  const displayIp        = status?.ip ?? '—';
+  const normalizedState  = status ? normalizeMotorState(status.state) : 'stopped';
+  const displayState     = normalizedState === 'unknown' ? 'stopped' : normalizedState;
+  const displayDirection = status ? normalizeMotorDirection(status.direction) : direction;
+  const displaySpeed     = numberValue(status?.speed);
+  const displaySpeedPct  = status ? parseFloat(stringValue(status.speed_pct, '0')) : 0;
+  const displayUptime    = numberValue(status?.uptime_ms);
+  const displayIp        = stringValue(status?.ip, '—');
 
   const btnBase = 'flex-1 py-2.5 rounded-lg text-sm font-mono tracking-wider cursor-pointer transition-all disabled:opacity-50';
 
@@ -165,7 +142,7 @@ export default function MotorPage() {
 
         {/* Direction toggle */}
         <div className="flex gap-3">
-          {(['forward', 'backward'] as const).map((d) => (
+          {(['forward', 'reverse'] as const).map((d) => (
             <button
               key={d}
               onClick={() => setDirection(d)}
@@ -176,7 +153,7 @@ export default function MotorPage() {
                 border:     `1px solid ${direction === d ? 'var(--c-accent)' : 'var(--c-border)'}`,
               }}
             >
-              {d === 'forward' ? '↺ FORWARD' : '↻ BACKWARD'}
+              {d === 'forward' ? '↺ FORWARD' : '↻ REVERSE'}
             </button>
           ))}
         </div>

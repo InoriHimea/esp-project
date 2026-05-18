@@ -1,0 +1,22 @@
+item,status,category,component,recommended_model,specs,quantity,notes
+1,Required,Controller,ESP32 development board,ESP32 DevKit / WROOM-32,"3.3V logic, WiFi",1,Main controller
+2,Required,Display adapter,E-paper adapter/HAT,Waveshare-style ESP32/Universal e-Paper Driver HAT or panel-matched adapter,3.3V SPI,1,Simplifies level shifting and FPC connection
+3,Required,Wiring,Jumper wires,Dupont female-female / breadboard wires,SPI plus control pins,1 set,Keep SPI wires short
+4,Required,Power,Decoupling capacitor,X7R ceramic,0.1uF / 50V,2,Near ESP32 and display adapter power pins
+5,Required,Power,Bulk capacitor,Low-ESR electrolytic or tantalum,100uF / >=10V,1,Refresh current spike buffering
+6,Required,Power,3.3V power source,ESP32 onboard regulator or external LDO,>=500mA recommended,1,Confirm adapter current requirement
+7,Recommended,Indicator,Status LED resistor,470Ω,1/4W,1,Optional external status LED
+8,Recommended,Input,User button,Momentary tactile switch,Normally open,1,Manual refresh or config input
+9,Recommended,Input,Pull-up/pull-down resistor,10kΩ,1/4W,1-2,Button and boot-safe input biasing
+10,Optional,Power,Battery module,Li-ion charger + boost/LDO board,3.7V Li-ion to 3.3V/5V,1,Portable display builds
+11,Optional,Power,Power switch,Slide/toggle switch,Rated for board current,1,Battery or service disconnect
+12,Optional,Storage,microSD module,SPI microSD module,3.3V logic,1,Local bitmap/image asset storage
+13,Optional,Storage,External flash,SPI flash breakout,3.3V,1,Alternative local asset storage
+14,Optional,Mechanical,Enclosure,3D printed or project box,Sized for panel and ESP32,1,Protects fragile glass panel
+15,Optional,Mechanical,Fasteners/spacers,M2/M2.5 nylon hardware,Panel-safe mounting,1 set,Avoid stress on panel glass
+M1,Choose one panel,Monochrome panel,Monochrome e-paper panel,Waveshare 2.9 inch e-Paper Module,"296x128, black/white, SPI",1,Good default first firmware target
+M2,Alternative,Monochrome panel,Monochrome e-paper panel,Waveshare 4.2 inch e-Paper Module,"400x300, black/white, SPI",1,Larger UI/status display
+M3,Alternative,Monochrome panel,Monochrome e-paper panel,Waveshare 7.5 inch e-Paper Module,"800x480, black/white, SPI",1,Requires careful power and refresh timing
+C1,Choose one panel,Color panel,Tri-color e-paper panel,Waveshare 2.9 inch e-Paper Module B/C variant,"296x128, black/white/red or black/white/yellow",1,Good first color target
+C2,Alternative,Color panel,Tri-color e-paper panel,Waveshare 4.2 inch e-Paper Module B/C variant,"400x300, black/white/red or yellow",1,Slower full refresh than mono
+C3,Alternative,Color panel,Seven-color e-paper panel,Waveshare 5.65 inch 7-color e-Paper,"600x448, 7-color palette",1,Full refresh only and larger framebuffer
