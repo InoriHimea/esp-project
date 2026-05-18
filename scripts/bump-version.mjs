@@ -12,7 +12,19 @@ if (!commitMsgPath) {
   process.exit(1);
 }
 
+const versionPaths = new Set([
+  'README.md',
+  'esp-server/VERSION',
+  'esp-ui/package.json',
+  'firmware/esp32-jgb37-drv8871-motor-controller/src/main.cpp',
+]);
+
 const git = (...args) => spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+
+function gitText(...args) {
+  const result = git(...args);
+  return result.status === 0 ? result.stdout : '';
+}
 
 const commitMessage = readFileSync(commitMsgPath, 'utf8');
 const subject = commitMessage
@@ -24,12 +36,12 @@ if (!subject || subject.startsWith('Merge ') || subject.startsWith('Revert ')) {
   process.exit(0);
 }
 
-const changed = git('diff', '--cached', '--name-only').stdout
+const stagedPaths = gitText('diff', '--cached', '--name-only')
   .split('\n')
-  .filter(Boolean)
-  .filter((path) => path !== 'esp-ui/package.json' && path !== 'esp-server/VERSION' && path !== 'README.md');
+  .filter(Boolean);
+const nonVersionChanges = stagedPaths.filter((path) => !versionPaths.has(path));
 
-if (changed.length === 0) {
+if (nonVersionChanges.length === 0) {
   process.exit(0);
 }
 
@@ -42,7 +54,9 @@ function bumpKind(message) {
 function bumpVersion(version, kind) {
   const match = version.trim().match(/^(\d+)\.(\d+)\.(\d+)$/);
   if (!match) throw new Error(`invalid semver: ${version}`);
-  let [, major, minor, patch] = match.map(Number);
+  let major = Number(match[1]);
+  let minor = Number(match[2]);
+  let patch = Number(match[3]);
   if (kind === 'major') {
     major += 1;
     minor = 0;
@@ -56,14 +70,27 @@ function bumpVersion(version, kind) {
   return `${major}.${minor}.${patch}`;
 }
 
-const versionFile = join(root, 'esp-server/VERSION');
-const oldVersion = readFileSync(versionFile, 'utf8').trim();
-const nextVersion = bumpVersion(oldVersion, bumpKind(commitMessage));
+function readHeadVersion() {
+  const fromHead = gitText('show', 'HEAD:esp-server/VERSION').trim();
+  if (fromHead) return fromHead;
+  return readFileSync(join(root, 'esp-server/VERSION'), 'utf8').trim();
+}
 
-if (nextVersion === oldVersion) {
+function readStagedVersion() {
+  const fromIndex = gitText('show', ':esp-server/VERSION').trim();
+  if (fromIndex) return fromIndex;
+  return readFileSync(join(root, 'esp-server/VERSION'), 'utf8').trim();
+}
+
+const oldVersion = readHeadVersion();
+const nextVersion = bumpVersion(oldVersion, bumpKind(commitMessage));
+const stagedVersion = readStagedVersion();
+
+if (stagedVersion === nextVersion) {
   process.exit(0);
 }
 
+const versionFile = join(root, 'esp-server/VERSION');
 writeFileSync(versionFile, `${nextVersion}\n`);
 
 const packageFile = join(root, 'esp-ui/package.json');
@@ -92,10 +119,12 @@ if (existsSync(motorMainFile)) {
   writeFileSync(motorMainFile, main);
 }
 
-const add = git('add', 'esp-server/VERSION', 'esp-ui/package.json', 'README.md', 'firmware/esp32-jgb37-drv8871-motor-controller/src/main.cpp');
+const add = git('add', ...versionPaths);
 if (add.status !== 0) {
   process.stderr.write(add.stderr);
   process.exit(add.status ?? 1);
 }
 
-console.log(`semantic version: ${oldVersion} -> ${nextVersion}`);
+console.error(`semantic version: ${oldVersion} -> ${nextVersion}`);
+console.error('Version files were updated and staged. Re-run the same git commit command.');
+process.exit(1);
