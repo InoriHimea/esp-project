@@ -236,4 +236,4 @@ docker-compose logs -f mqtt-service
 
 ## 授權
 
-MIT License
+GNU Affero General Public License v3.0 only (AGPL-3.0-only)

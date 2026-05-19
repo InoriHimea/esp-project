@@ -75,7 +75,7 @@
   ✅ PROJECT_SUMMARY.md  - 專案總結和技術細節
   ✅ STRUCTURE.md        - 專案結構說明
   ✅ CHANGELOG.md        - 版本變更記錄
-  ✅ LICENSE             - MIT 授權
+  ✅ LICENSE             - AGPLv3 授權
 
 技術文檔:
   ✅ API 端點說明

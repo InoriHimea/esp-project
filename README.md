@@ -1,415 +1,369 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.4.4-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.4)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](esp-server/LICENSE)
+[![Version](https://img.shields.io/badge/version-1.4.5-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.5)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--only-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26.3-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 
-完整的 ESP32 設備控制平台，包含後端微服務、前端 UI 和 ESP32 韌體。
+面向 ESP32 设备的控制平台，包含 Go 微服务后端、React 管理界面、MQTT/WebSocket 实时通道，以及两个 PlatformIO 固件项目：JGB37/DRV8871 马达控制器与电子墨水屏控制器。
 
-**當前版本：v1.4.4**
+**当前版本：v1.4.5**
 
-## 📋 專案概述
+## 项目概览
 
-本專案是一個完整的物聯網控制平台，用於管理和控制 ESP32 設備。採用現代化的微服務架構，提供實時設備監控、命令控制和歷史數據查詢功能。
+本项目把设备接入、状态采集、命令下发和 Web 管理拆分为几个清晰的层次：
 
-### 🎯 主要特性
+- 后端通过 API Gateway 暴露统一 HTTP/WebSocket 入口。
+- ESP32 设备通过 MQTT 上报状态并接收命令。
+- PostgreSQL 保存设备信息、最后状态和事件历史。
+- 前端根据设备上报的 `device_type` 自动进入马达、电子墨水屏或调试页面。
+- CI 覆盖 Go 测试/构建/lint、React lint/build、PlatformIO 固件构建和 Docker 镜像构建。
+- tag `vX.Y.Z` 会触发 Docker publish workflow，发布 GHCR 镜像并生成 release compose artifact。
 
-- 🚀 **微服務架構** - 基於 Go 的高性能微服務後端
-- 📱 **現代化 UI** - React + TypeScript 前端應用
-- 🔌 **ESP32 支援** - 完整的 ESP32 韌體實現
-- 🔄 **實時通訊** - WebSocket 實時推送 + MQTT 設備通訊
-- 🔒 **安全認證** - JWT 令牌認證機制
-- 🐳 **容器化部署** - 完整的 Docker 支援
-- 📊 **設備監控** - 實時狀態監控和歷史記錄
-- ⚡ **高性能** - 相比 Node.js 版本性能提升 30-50%
+## 当前能力
 
-## 🏗️ 專案結構
+### 后端平台
 
-```
+- Go 1.26.3 微服务架构。
+- JWT 登录认证和受保护 API。
+- PostgreSQL 自动迁移和默认管理员初始化。
+- MQTT 设备状态订阅：`esp/devices/+/status`。
+- MQTT 设备命令发布：`esp/devices/{device_id}/command`。
+- WebSocket 状态广播：`/ws?token=<jwt>`。
+- 设备状态使用 JSONB 保存，可兼容不同类型设备的自定义状态字段。
+
+### 前端 UI
+
+- React 19 + TypeScript + Vite + TailwindCSS。
+- 登录页、Dashboard、设置页和设备调试页。
+- 马达设备页面：运行、停止、刹车、惰行、速度与方向控制。
+- 电子墨水屏页面：文本显示、清屏、刷新、睡眠、唤醒。
+- WebSocket 实时状态更新。
+- 设备卡片根据 `motor` / `epaper` / `unknown` 路由到对应页面。
+
+### ESP32 固件
+
+| 固件项目 | PlatformIO env | 状态 |
+|----------|----------------|------|
+| `firmware/esp32-jgb37-drv8871-motor-controller` | `esp32dev` | 马达控制器，可控制 DRV8871 + JGB37-520，包含 AP 配网、HTTP API、WebSocket、MQTT、自检系统和三位数码管显示 |
+| `firmware/esp32-epaper-display` | `esp32dev-epaper-mono` | 电子墨水屏黑白屏构建，已实现配置、状态、命令和 MQTT/HTTP 协议骨架 |
+| `firmware/esp32-epaper-display` | `esp32dev-epaper-color` | 电子墨水屏彩色/三色屏构建，已实现配置、状态、命令和 MQTT/HTTP 协议骨架 |
+
+电子墨水屏固件目前的 `EpaperDisplay` 是命令/状态抽象层，会记录渲染操作并模拟刷新状态；真实屏幕驱动仍需在确认具体 panel 型号、控制器、库和接线后接入。
+
+## 目录结构
+
+```text
 esp-project/
-├── esp-server/          # Go 微服務後端
-│   ├── api-gateway/     # API Gateway 服務
-│   ├── auth-service/    # 認證服務
-│   ├── device-service/  # 設備管理服務
-│   ├── mqtt-service/    # MQTT 處理服務
-│   ├── websocket-service/ # WebSocket 服務
-│   └── shared/          # 共享套件
-├── esp-ui/              # React 前端應用
-├── firmware/            # ESP32 韌體（PlatformIO）
+├── .github/workflows/          # CI 与 Docker publish workflow
+├── docker/                     # Unraid/macvlan 部署 compose
+├── esp-server/                 # Go 微服务后端
+│   ├── api-gateway/            # API Gateway、认证校验、WebSocket 代理
+│   ├── auth-service/           # 登录、JWT、密码修改
+│   ├── device-service/         # 设备列表、状态、历史、命令下发
+│   ├── mqtt-service/           # MQTT 状态消费与设备 upsert
+│   ├── websocket-service/      # MQTT 状态转 WebSocket 广播
+│   └── shared/                 # 配置、数据库、JWT、logger、middleware、models
+├── esp-ui/                     # React 前端
+├── firmware/
 │   ├── esp32-jgb37-drv8871-motor-controller/
 │   └── esp32-epaper-display/
-└── docker/              # Docker 配置
+└── scripts/                    # 版本 bump 等维护脚本
 ```
 
-## 🚀 快速開始
+## 快速开始
 
 ### 前置要求
 
-- Docker 和 Docker Compose
-- Go 1.26.3+ (僅用於本地開發)
-- Node.js 18+ (僅用於前端開發)
-- PlatformIO (僅用於 ESP32 開發)
+- Docker 与 Docker Compose
+- Go 1.26.3+（后端本地开发）
+- Node.js 24+ 与 Corepack/pnpm 10（前端本地开发）
+- Python 3 + PlatformIO（固件开发）
 
-### 使用 Docker Compose 啟動（推薦）
-
-1. **克隆專案**
-   ```bash
-   git clone https://github.com/InoriHimea/esp-project.git
-   cd esp-project
-   ```
-
-2. **配置環境變數**
-   ```bash
-   cd esp-server
-   cp .env.example .env
-   # 編輯 .env 設置 JWT_SECRET 等
-   ```
-
-3. **啟動所有服務**
-   ```bash
-   docker compose up -d
-   ```
-
-4. **驗證部署**
-   ```bash
-   curl http://localhost:8080/health
-   ```
-
-5. **訪問應用**
-   - 後端 API: http://localhost:8080
-   - 前端 UI: http://localhost:5173
-   - 預設帳號: admin / changeme
-
-### 本地開發
-
-詳細的開發指南請參閱各個子專案的 README：
-
-- [後端開發指南](esp-server/README.md)
-- [前端開發指南](esp-ui/README.md)
-- [ESP32 韌體開發](firmware/README.md)
-
-## 📦 專案組件
-
-### 後端微服務 (esp-server/)
-
-基於 Go 1.26.3 的微服務架構，包含 5 個獨立服務：
-
-| 服務 | 端口 | 說明 |
-|------|------|------|
-| API Gateway | 8080 | 統一入口、路由、認證 |
-| Auth Service | 8081 | 用戶認證、JWT 管理 |
-| Device Service | 8082 | 設備管理、狀態查詢 |
-| MQTT Service | 8083 | MQTT 消息處理 |
-| WebSocket Service | 8084 | 實時推送 |
-
-**技術棧**：
-- Go 1.26.3
-- PostgreSQL 18.3
-- Eclipse Mosquitto 2
-- Docker & Docker Compose
-
-**文檔**：
-- [快速啟動](esp-server/QUICKSTART.md)
-- [部署指南](esp-server/DEPLOYMENT.md)
-- [API 文檔](esp-server/README.md)
-
-### 前端應用 (esp-ui/)
-
-基於 React + TypeScript 的現代化 Web 應用。
-
-**技術棧**：
-- React 19
-- TypeScript
-- Vite
-- TailwindCSS
-
-**功能**：
-- 設備列表和狀態監控
-- 實時數據更新
-- 設備命令控制
-- 歷史記錄查詢
-- 響應式設計
-
-### ESP32 韌體 (firmware/)
-
-基於 PlatformIO 的 ESP32 韌體實現，包含電機控制器與電子墨水屏控制器。
-
-**功能**：
-- 馬達控制（DRV8871 H 橋 + PWM 速度控制）
-- 3 位共陽極數碼管顯示（RPM / 占空比 / 原始值 三模式輪播）
-- LED 狀態指示（多種閃爍模式對應不同馬達狀態）
-- WiFi 配網（AP 模式 + 設定頁面）
-- MQTT 通訊（與後端平台對接）
-- HTTP API + WebSocket 實時控制
-- **綜合自檢系統**（LED / 數碼管 / 馬達 / GPIO 五類測試）
-
-**硬件構成**：
-| 元件 | 用途 |
-|------|------|
-| ESP32 DevKit | 主控 |
-| DRV8871 | H 橋馬達驅動（24V / 1.5A）|
-| JGB37-520 直流減速馬達 | 24V，可正反轉 |
-| 3 位共陽極數碼管 | 顯示速度/RPM |
-| S8050 + 2N5401 + 速度補償電容 | 數碼管位選高邊驅動（含抗鬼影設計）|
-| 5V 電源去耦電容（100μF + 0.1μF）| 抗 24V 馬達 PWM 干擾 |
-| GPIO 下拉電阻（10kΩ）| 段選/位選邏輯電平穩定 |
-| Mini 560 降壓模塊 | 24V → 5V/3.3V |
-
-**重要硬件文檔**：
-- 📐 [數碼管驅動電路設計與鬼影消除](firmware/esp32-jgb37-drv8871-motor-controller/docs/display-driver-circuit.md)
-- 📋 [馬達控制器 BOM](firmware/esp32-jgb37-drv8871-motor-controller/BOM.md)
-- 📋 [電子墨水屏 BOM](firmware/esp32-epaper-display/BOM.md)
-  - 完整電路圖（NPN + PNP 達林頓對管）
-  - **速度補償電容方案**（解決殘影 / 鬼影）
-  - ULN2803 / MIC2981 專用驅動 IC 替代方案說明
-
-**自檢測試**：
-韌體預設開機自動執行完整自檢（LED → 數碼管 → GPIO → 馬達 PWM），約耗時 45 秒。  
-也可以隨時通過 HTTP / MQTT / WebSocket 觸發單項或完整測試：
+### 后端 Docker 启动
 
 ```bash
-# HTTP 觸發（需要先連接 WiFi）
-curl -X POST http://motorctrl.local/api/test \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"all"}'
-
-# 查詢測試進度
-curl http://motorctrl.local/api/test
-
-# 關閉開機自檢（持久化）
-curl -X POST http://motorctrl.local/api/boot-test \
-  -H 'Content-Type: application/json' \
-  -d '{"enabled":false}'
+cd esp-server
+cp .env.example .env
+# 编辑 .env，至少设置 JWT_SECRET / INTERNAL_TOKEN / 数据库密码等生产密钥
+docker compose up -d
+curl http://localhost:8080/health
 ```
 
-支援的測試類型：`led` / `display` / `motor` / `gpio` / `all`
+默认入口：
 
-## 🔧 API 端點
+- API Gateway: `http://localhost:8080`
+- PostgreSQL: `localhost:5432`
+- MQTT: `localhost:1883`
+- Mosquitto WebSocket: `localhost:9001`
+- 默认管理员：`admin` / `changeme`
 
-### 認證
-- `POST /api/v1/auth/login` - 用戶登入
+### 前端本地开发
 
-### 設備管理
-- `GET /api/v1/devices` - 獲取設備列表
-- `GET /api/v1/devices/:id/status` - 獲取設備狀態
-- `GET /api/v1/devices/:id/history` - 獲取設備歷史
-- `POST /api/v1/devices/:id/command` - 發送設備命令
+```bash
+cd esp-ui
+corepack enable
+corepack prepare pnpm@10 --activate
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Vite 开发服务默认运行在 `http://localhost:5173`。
+
+### 固件构建
+
+```bash
+# 马达控制器
+pio run -d firmware/esp32-jgb37-drv8871-motor-controller -e esp32dev
+
+# 电子墨水屏黑白屏
+pio run -d firmware/esp32-epaper-display -e esp32dev-epaper-mono
+
+# 电子墨水屏彩色/三色屏
+pio run -d firmware/esp32-epaper-display -e esp32dev-epaper-color
+```
+
+烧录时追加 `-t upload`，串口监控使用 `pio device monitor`。
+
+## API 速查
+
+### 认证
+
+```http
+POST /api/v1/auth/login
+POST /api/v1/auth/change-password
+```
+
+登录请求示例：
+
+```json
+{
+  "username": "admin",
+  "password": "changeme"
+}
+```
+
+### 设备
+
+以下接口需要 `Authorization: Bearer <jwt>`：
+
+```http
+GET  /api/v1/devices
+GET  /api/v1/devices/{device_id}/status
+GET  /api/v1/devices/{device_id}/history?limit=50&offset=0
+POST /api/v1/devices/{device_id}/command
+```
+
+马达命令示例：
+
+```json
+{
+  "cmd": "run",
+  "speed": 100,
+  "direction": "forward"
+}
+```
+
+电子墨水屏命令示例：
+
+```json
+{
+  "cmd": "display_text",
+  "text": "Hello ESP32",
+  "x": 0,
+  "y": 24,
+  "size": 2,
+  "color": "black",
+  "refresh": "full"
+}
+```
 
 ### WebSocket
-- `WS /ws?token=<jwt>` - WebSocket 連接
 
-### 健康檢查
-- `GET /health` - 服務健康狀態
+```text
+/ws?token=<jwt>
+```
 
-詳細 API 文檔請參閱 [esp-server/README.md](esp-server/README.md)
+广播消息包含设备 ID、消息类型和设备状态 payload。
 
-## 🐳 Docker 部署
+## MQTT 协议
 
-### 標準部署（推薦）
+设备状态上报：
 
-適用於大多數環境，使用 Docker 內部網絡：
+```text
+esp/devices/{device_id}/status
+```
+
+设备命令下发：
+
+```text
+esp/devices/{device_id}/command
+```
+
+所有设备状态建议包含：
+
+```json
+{
+  "device_type": "motor",
+  "ip": "192.168.1.50",
+  "uptime_ms": 10000
+}
+```
+
+`device_type` 当前支持：
+
+- `motor`
+- `epaper`
+- `unknown`
+
+电子墨水屏状态示例：
+
+```json
+{
+  "device_type": "epaper",
+  "panel_type": "mono",
+  "panel_model": "waveshare_2in9_bw",
+  "width": 296,
+  "height": 128,
+  "busy": false,
+  "state": "idle",
+  "palette": ["white", "black"],
+  "refresh_count": 3,
+  "ip": "192.168.1.50"
+}
+```
+
+## Docker 与发布
+
+### 本地 compose
+
+`esp-server/docker-compose.yml` 会启动：
+
+- PostgreSQL 18.3
+- Eclipse Mosquitto 2.1.2
+- API Gateway
+- Auth Service
+- Device Service
+- MQTT Service
+- WebSocket Service
+
+### Unraid/macvlan compose
+
+`docker/docker-compose.yml` 提供按独立 IP 部署的 compose 模板，配置见 `docker/.env.example`。
+
+### GHCR 镜像发布
+
+推送 tag `vX.Y.Z` 会触发 `.github/workflows/docker-publish.yml`：
+
+- 构建并推送 5 个后端服务镜像到 GHCR。
+- 镜像 tag 使用不带 `v` 的 semver，例如 `1.4.4`。
+- 生成 `docker-compose.release.yml` 和 `mosquitto.conf` artifact。
+
+镜像命名格式：
+
+```text
+ghcr.io/inorihimea/esp-platform-api-gateway:<version>
+ghcr.io/inorihimea/esp-platform-auth-service:<version>
+ghcr.io/inorihimea/esp-platform-device-service:<version>
+ghcr.io/inorihimea/esp-platform-mqtt-service:<version>
+ghcr.io/inorihimea/esp-platform-websocket-service:<version>
+```
+
+## CI 检查
+
+GitHub Actions 的 CI 覆盖：
+
+- Go dependency verify、`go vet`、race test 和 coverage。
+- Go 多平台构建：linux/darwin/windows × amd64/arm64（排除 windows/arm64）。
+- `golangci-lint`。
+- 前端 `pnpm lint` 与 `pnpm build`。
+- PlatformIO 固件构建：马达、e-paper mono、e-paper color。
+- Docker buildx 构建 5 个后端服务镜像。
+
+本地常用检查：
 
 ```bash
-cd esp-server
-cp .env.example .env
-# 編輯 .env 設置 JWT_SECRET 等
-docker compose up -d
-```
-
-服務將在以下端口啟動：
-- API Gateway: http://localhost:8080
-- 前端 UI: 需要單獨構建或使用開發模式
-
-### Unraid macvlan 部署
-
-適用於 Unraid 環境，為每個服務分配獨立 IP：
-
-```bash
-cd docker
-cp .env.example .env
-# 編輯 .env 配置 IP 地址和密鑰
-docker compose up -d
-```
-
-詳細配置說明請參閱 `docker/.env.example`。
-
-### 使用預構建鏡像
-
-```bash
-# 拉取鏡像
-docker pull ghcr.io/inorihimea/esp-platform-api-gateway:1.4.1
-
-# 使用 docker-compose
-cd esp-server
-docker compose up -d
-```
-
-## 📊 架構圖
-
-```
-┌─────────────┐
-│   前端 UI   │
-│ (React App) │
-└──────┬──────┘
-       │ HTTP/WebSocket
-       ▼
-┌─────────────────────────────────────┐
-│         API Gateway (8080)          │
-│  ┌──────────┬──────────────────┐   │
-│  │  路由    │  JWT 認證        │   │
-│  └──────────┴──────────────────┘   │
-└────┬────────┬────────┬─────────┬───┘
-     │        │        │         │
-     ▼        ▼        ▼         ▼
-┌─────────┐ ┌────────┐ ┌──────┐ ┌──────────┐
-│  Auth   │ │ Device │ │ MQTT │ │WebSocket │
-│ Service │ │Service │ │Service│ │ Service  │
-│ (8081)  │ │ (8082) │ │(8083) │ │  (8084)  │
-└────┬────┘ └───┬────┘ └───┬───┘ └──────────┘
-     │          │           │
-     └──────────┴───────────┘
-                │
-     ┌──────────┴──────────┐
-     ▼                     ▼
-┌──────────┐        ┌──────────┐
-│PostgreSQL│        │Mosquitto │
-│   (DB)   │        │  (MQTT)  │
-└──────────┘        └────┬─────┘
-                         │
-                         ▼
-                    ┌─────────┐
-                    │  ESP32  │
-                    │ Devices │
-                    └─────────┘
-```
-
-## 🔐 安全性
-
-- ✅ JWT 令牌認證
-- ✅ bcrypt 密碼哈希
-- ✅ SQL 注入防護
-- ✅ CORS 跨域控制
-- ✅ 環境變數管理敏感信息
-- ✅ 非 root 容器運行
-
-**生產環境建議**：
-- 更改預設密碼
-- 使用強 JWT 密鑰
-- 啟用 HTTPS
-- 配置防火牆
-- 定期更新依賴
-
-## 📈 性能
-
-相比 Node.js 版本的性能提升：
-
-| 指標 | 提升幅度 |
-|------|---------|
-| 響應時間 | ↓ 30-50% |
-| 記憶體使用 | ↓ 40-60% |
-| CPU 使用 | ↓ 20-30% |
-| 並發連接 | ↑ 2-3x |
-
-## 🧪 測試
-
-```bash
-# 後端測試
+# 后端
 cd esp-server
 go test ./...
 
-# API 測試
-./test-api.sh
+go vet ./...
 
-# 負載測試
-k6 run load-test.js
-
-# 前端檢查
-cd esp-ui
+# 前端
+cd ../esp-ui
 pnpm lint
 pnpm build
+
+# 固件
+cd ..
+pio run -d firmware/esp32-jgb37-drv8871-motor-controller -e esp32dev
+pio run -d firmware/esp32-epaper-display -e esp32dev-epaper-mono
+pio run -d firmware/esp32-epaper-display -e esp32dev-epaper-color
 ```
 
-## 📝 版本歷史
+## 版本管理
 
-### v1.3.0 (2024-05-17)
-- ✨ ESP32 韌體新增 SelfTest 綜合自檢系統
-- 🔧 DRV8871 PWM 頻率從 20kHz 降至 1kHz（修復馬達不轉）
-- 🔧 GPIO12 改為 GPIO5（避免啟動問題）
-- 📚 新增完整硬件設計文檔（暖菜旋轉盤方案）
-- 📚 新增數碼管驅動電路設計文檔
-- 📚 新增 ESP32 馬達控制器韌體使用指南
+项目使用 semver，当前规范版本文件为 `esp-server/VERSION`。
 
-### v1.2.0 (2024-05-15)
-- 前端集成改進：統一 Dashboard 數據來源
-- Docker 部署優化：支持 Unraid macvlan 網絡
-- 完善部署文檔和配置說明
+`.githooks/commit-msg` 会调用 `scripts/bump-version.mjs`：
 
-### v1.1.0 (2024-05-15)
-- 🐛 修復後端編譯問題
-  - 補齊 Go 依賴（websocket, bcrypt, mqtt）
-  - 統一 config、database、JWT、middleware 接口
-  - 添加 logger.Fatal() 函數
-- ✨ 完善後端運行邏輯
-  - 數據庫自動遷移和初始化
-  - 默認管理員賬號自動創建（admin/changeme）
-  - 改進 Device Service 路由解析
-  - 實現密碼修改端點
-  - 修復 WebSocket 消息類型（匹配前端協議）
-- 🔧 修正 ESP32 數碼管配置
-  - 支持共陽極數碼管（Common Anode）
-  - 修正段選和位選邏輯
-  - 向後兼容共陰極配置
-- 📚 添加 plan.md 開發計劃文檔
+- `feat:` → minor
+- `fix:` / `chore:` / 其他提交类型 → patch
+- `BREAKING CHANGE:` 或 `type!:` → major
 
-### v1.0.0 (2024-01-15)
-- ✨ 初始發布
-- 🚀 完整的 Go 微服務架構
-- 📱 React 前端應用
-- 🔌 ESP32 韌體支援
-- 🐳 Docker 容器化部署
-- 📚 完整的文檔
+脚本会同步更新：
 
-詳細變更請查看 [CHANGELOG.md](esp-server/CHANGELOG.md)
+- `README.md`
+- `esp-server/VERSION`
+- `esp-ui/package.json`
+- `firmware/esp32-jgb37-drv8871-motor-controller/src/main.cpp`
 
-## 🤝 貢獻
+如果 hook 更新了版本文件，它会要求重新执行同一条 `git commit`，确保版本变更进入提交。
 
-歡迎貢獻！請遵循以下步驟：
+## 硬件与 BOM
 
-1. Fork 本專案
-2. 創建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 開啟 Pull Request
+- [马达控制器 BOM](firmware/esp32-jgb37-drv8871-motor-controller/BOM.md)
+- [电子墨水屏 BOM](firmware/esp32-epaper-display/BOM.md)
+- [数码管驱动电路与鬼影消除](firmware/esp32-jgb37-drv8871-motor-controller/docs/display-driver-circuit.md)
+- [马达控制器硬件设计](firmware/esp32-jgb37-drv8871-motor-controller/docs/hardware-design.md)
 
-## 📄 授權
+## 已知限制与后续事项
 
-本專案採用 MIT 授權 - 詳見 [LICENSE](esp-server/LICENSE) 文件
+- 电子墨水屏真实驱动尚未接入，需要先确认具体 panel 型号、控制器、驱动库和接线。
+- 马达方向切换当前仍直接切换，后续可改为先减速到 0 再反向加速以降低电流毛刺。
+- 马达控制器没有编码器反馈，当前不是闭环转速控制。
+- 前端构建产物尚未嵌入 ESP32 LittleFS，当前以前端独立部署为主。
+- CI 中 `errcheck` 暂时禁用，后续可逐步补齐历史未检查错误。
 
-## 📞 聯繫方式
+## 安全建议
+
+生产环境部署前至少完成：
+
+- 修改默认管理员密码。
+- 使用强 `JWT_SECRET` 和 `INTERNAL_TOKEN`。
+- 修改数据库密码。
+- 配置 `CORS_ORIGINS` 为实际前端域名。
+- 在 API Gateway 前放置 HTTPS 反向代理。
+- 不要将 `.env`、密钥或真实 WiFi/MQTT 凭据提交到仓库。
+
+## 文档入口
+
+- [后端 README](esp-server/README.md)
+- [后端快速启动](esp-server/QUICKSTART.md)
+- [后端部署指南](esp-server/DEPLOYMENT.md)
+- [前端 README](esp-ui/README.md)
+- [固件 README](firmware/README.md)
+- [马达控制器固件 README](firmware/esp32-jgb37-drv8871-motor-controller/README.md)
+- [电子墨水屏固件 README](firmware/esp32-epaper-display/README.md)
+- [后端 CHANGELOG](esp-server/CHANGELOG.md)
+
+## 授权
+
+本项目采用 GNU Affero General Public License v3.0 only（AGPL-3.0-only）授权，详见 [LICENSE](LICENSE)。
+
+## 联系方式
 
 - 作者: InoriHimea
 - Email: icarus347@gmail.com
 - GitHub: [@InoriHimea](https://github.com/InoriHimea)
-- 專案連結: [https://github.com/InoriHimea/esp-project](https://github.com/InoriHimea/esp-project)
-
-## 🙏 致謝
-
-- [Go](https://go.dev/) - 高性能後端語言
-- [React](https://react.dev/) - 前端框架
-- [PlatformIO](https://platformio.org/) - ESP32 開發平台
-- [PostgreSQL](https://www.postgresql.org/) - 資料庫
-- [Eclipse Mosquitto](https://mosquitto.org/) - MQTT Broker
-- [Docker](https://www.docker.com/) - 容器化平台
-
-## 📚 相關資源
-
-- [Go 官方文檔](https://go.dev/doc/)
-- [React 官方文檔](https://react.dev/)
-- [ESP32 文檔](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/)
-- [MQTT 協議](https://mqtt.org/)
-- [Docker 文檔](https://docs.docker.com/)
-
----
-
-**⭐ 如果這個專案對您有幫助，請給個星星！**
+- 项目链接: [https://github.com/InoriHimea/esp-project](https://github.com/InoriHimea/esp-project)

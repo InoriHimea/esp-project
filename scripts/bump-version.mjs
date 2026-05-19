@@ -107,7 +107,7 @@ if (existsSync(readmeFile)) {
   readme = readme
     .replace(/version-[0-9]+\.[0-9]+\.[0-9]+-blue/g, `version-${nextVersion}-blue`)
     .replace(/releases\/tag\/v[0-9]+\.[0-9]+\.[0-9]+/g, `releases/tag/v${nextVersion}`)
-    .replace(/\*\*當前版本：v[0-9]+\.[0-9]+\.[0-9]+\*\*/g, `**當前版本：v${nextVersion}**`);
+    .replace(/\*\*((?:當前|当前)版本：)v[0-9]+\.[0-9]+\.[0-9]+\*\*/g, `**$1v${nextVersion}**`);
   writeFileSync(readmeFile, readme);
 }
 
