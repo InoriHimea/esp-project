@@ -91,9 +91,9 @@
 ## 技術棧
 
 ### 後端
-- **語言**: Go 1.22
+- **語言**: Go 1.26.3
 - **HTTP 框架**: 標準庫 net/http
-- **資料庫**: PostgreSQL 16
+- **資料庫**: PostgreSQL 18.3
 - **MQTT**: Eclipse Paho MQTT
 - **WebSocket**: Gorilla WebSocket
 - **JWT**: golang-jwt/jwt
@@ -295,7 +295,7 @@
 - [ ] 集成測試套件
 - [ ] Prometheus 指標
 - [ ] API 文檔（Swagger/OpenAPI）
-- [ ] CI/CD 流水線
+- [x] CI/CD 流水線（GitHub Actions 覆蓋後端、前端、Docker 與韌體構建）
 
 ### 中期（3-6 個月）
 - [ ] 分佈式追蹤

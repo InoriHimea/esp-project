@@ -54,7 +54,7 @@ WiFi 和 MQTT 通过设备首次启动后的 AP 配网页配置，不再需要�
 ## 前端 (React 19 + Tailwind v4)
 
 ```bash
-cd react_frontend
+cd esp-ui
 
 # 复制环境变量
 cp .env.example .env
@@ -133,7 +133,7 @@ WebSocket: `ws://<ip>/ws` — 100 ms 广播，详见 `MOBILE_API.md`
 `MotorController::_rampTick()` 每 10ms 执行一次：  
 - 计算每 tick 步长 = `Δduty / (ramp_ms / 10)`  
 - 逐步逼近 `_target_duty`，到达后状态转为 `RUNNING`  
-- 方向切换时先减速到 0，再反向加速（避免电机浪涌）
+- 方向切换当前由目标方向直接驱动，后续可改为先减速到 0 再反向加速以降低电流毛刺
 
 ---
 
@@ -142,4 +142,4 @@ WebSocket: `ws://<ip>/ws` — 100 ms 广播，详见 `MOBILE_API.md`
 - [ ] 方向切换未强制先减速到 0（当前版本直接切换，DRV8871 内部有保护但电流会有毛刺）
 - [ ] 没有编码器反馈，无法做闭环转速控制
 - [ ] LittleFS 嵌入前端资产（目前前端需单独部署）
-- [ ] BLE 配网（当前 WiFi 凭证硬编码）
+- [ ] BLE 配网（当前使用 AP 模式配置 WiFi/MQTT，并保存到 NVS）

@@ -5,6 +5,14 @@
 格式基於 [Keep a Changelog](https://keepachangelog.com/zh-TW/1.0.0/)，
 版本號遵循 [語義化版本](https://semver.org/lang/zh-TW/)。
 
+## [Unreleased]
+
+### 改進
+
+- Docker publish workflow 生成的 release compose manifest 補齊 MQTT broker 設定與 Mosquitto 配置 artifact。
+- CI 新增前端 lint/build 與 PlatformIO 韌體構建覆蓋。
+- 同步 Go、React、PostgreSQL、前端路徑與 WiFi provisioning 文檔描述。
+
 ## [1.2.0] - 2024-05-15
 
 ### 新增
@@ -223,8 +231,8 @@
 - ✅ 依賴項狀態檢查
 
 ### 技術棧
-- Go 1.22
-- PostgreSQL 16
+- Go 1.26.3
+- PostgreSQL 18.3
 - Eclipse Mosquitto 2
 - Docker & Docker Compose
 - Gorilla WebSocket
@@ -254,7 +262,7 @@
 - [ ] 集成測試套件
 - [ ] Prometheus 指標端點
 - [ ] OpenAPI/Swagger 文檔
-- [ ] CI/CD 流水線（GitHub Actions）
+- [x] CI/CD 流水線（GitHub Actions）
 - [ ] Rate limiting 中間件
 - [ ] API 密鑰認證
 

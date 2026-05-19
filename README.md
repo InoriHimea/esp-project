@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.1)
+[![Version](https://img.shields.io/badge/version-1.4.2-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.2)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](esp-server/LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.22-00ADD8.svg)](https://go.dev/)
-[![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
+[![Go](https://img.shields.io/badge/Go-1.26.3-00ADD8.svg)](https://go.dev/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 
 完整的 ESP32 設備控制平台，包含後端微服務、前端 UI 和 ESP32 韌體。
 
-**當前版本：v1.4.1**
+**當前版本：v1.4.2**
 
 ## 📋 專案概述
 
@@ -47,7 +47,7 @@ esp-project/
 ### 前置要求
 
 - Docker 和 Docker Compose
-- Go 1.22+ (僅用於本地開發)
+- Go 1.26.3+ (僅用於本地開發)
 - Node.js 18+ (僅用於前端開發)
 - PlatformIO (僅用於 ESP32 開發)
 
@@ -93,7 +93,7 @@ esp-project/
 
 ### 後端微服務 (esp-server/)
 
-基於 Go 1.22 的微服務架構，包含 5 個獨立服務：
+基於 Go 1.26.3 的微服務架構，包含 5 個獨立服務：
 
 | 服務 | 端口 | 說明 |
 |------|------|------|
@@ -104,8 +104,8 @@ esp-project/
 | WebSocket Service | 8084 | 實時推送 |
 
 **技術棧**：
-- Go 1.22
-- PostgreSQL 16
+- Go 1.26.3
+- PostgreSQL 18.3
 - Eclipse Mosquitto 2
 - Docker & Docker Compose
 
@@ -119,7 +119,7 @@ esp-project/
 基於 React + TypeScript 的現代化 Web 應用。
 
 **技術棧**：
-- React 18
+- React 19
 - TypeScript
 - Vite
 - TailwindCSS
@@ -238,7 +238,7 @@ docker compose up -d
 
 ```bash
 # 拉取鏡像
-docker pull ghcr.io/inorihimea/esp-platform-api-gateway:v1.1.0
+docker pull ghcr.io/inorihimea/esp-platform-api-gateway:1.4.1
 
 # 使用 docker-compose
 cd esp-server
@@ -324,9 +324,10 @@ go test ./...
 # 負載測試
 k6 run load-test.js
 
-# 前端測試
+# 前端檢查
 cd esp-ui
-npm test
+pnpm lint
+pnpm build
 ```
 
 ## 📝 版本歷史

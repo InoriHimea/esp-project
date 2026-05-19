@@ -40,8 +40,9 @@ const stagedPaths = gitText('diff', '--cached', '--name-only')
   .split('\n')
   .filter(Boolean);
 const nonVersionChanges = stagedPaths.filter((path) => !versionPaths.has(path));
+const stagedCanonicalVersionChange = stagedPaths.includes('esp-server/VERSION');
 
-if (nonVersionChanges.length === 0) {
+if (nonVersionChanges.length === 0 || stagedCanonicalVersionChange) {
   process.exit(0);
 }
 

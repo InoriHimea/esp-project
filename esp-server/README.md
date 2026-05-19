@@ -19,7 +19,7 @@
 ### 前置要求
 
 - Docker 和 Docker Compose
-- Go 1.22+ (僅用於本地開發)
+- Go 1.26.3+ (僅用於本地開發)
 
 ### 使用 Docker Compose 啟動
 
