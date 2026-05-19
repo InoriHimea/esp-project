@@ -194,14 +194,12 @@ func proxyToService(serviceURL, path string, requireAuth bool, jwtManager *jwt.M
 		}
 
 		// 創建反向代理
-		proxy := httputil.NewSingleHostReverseProxy(targetURL)
-
-		// 修改請求
-		originalDirector := proxy.Director
-		proxy.Director = func(req *http.Request) {
-			originalDirector(req)
-			req.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/v1")
-			req.Host = targetURL.Host
+		proxy := &httputil.ReverseProxy{
+			Rewrite: func(pr *httputil.ProxyRequest) {
+				pr.SetURL(targetURL)
+				pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, "/api/v1")
+				pr.Out.Host = targetURL.Host
+			},
 		}
 
 		// 錯誤處理
@@ -234,66 +232,66 @@ func handleWebSocket(jwtManager *jwt.Manager) http.HandlerFunc {
 			return
 		}
 
-	// 連接到 WebSocket 服務
-	wsURL := strings.Replace(websocketServiceURL, "http://", "ws://", 1) + "/ws"
-	backendConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		logger.Error("Failed to connect to WebSocket service", "error", err)
-		http.Error(w, "Service unavailable", http.StatusBadGateway)
-		return
-	}
-	defer backendConn.Close()
-
-	// 升級客戶端連接
-	clientConn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		logger.Error("Failed to upgrade client connection", "error", err)
-		return
-	}
-	defer clientConn.Close()
-
-	logger.Info("WebSocket connection established", "remote_addr", r.RemoteAddr)
-
-	// 雙向代理
-	errChan := make(chan error, 2)
-
-	// 客戶端 -> 後端
-	go func() {
-		for {
-			messageType, message, err := clientConn.ReadMessage()
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if err := backendConn.WriteMessage(messageType, message); err != nil {
-				errChan <- err
-				return
-			}
+		// 連接到 WebSocket 服務
+		wsURL := strings.Replace(websocketServiceURL, "http://", "ws://", 1) + "/ws"
+		backendConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+		if err != nil {
+			logger.Error("Failed to connect to WebSocket service", "error", err)
+			http.Error(w, "Service unavailable", http.StatusBadGateway)
+			return
 		}
-	}()
+		defer backendConn.Close()
 
-	// 後端 -> 客戶端
-	go func() {
-		for {
-			messageType, message, err := backendConn.ReadMessage()
-			if err != nil {
-				errChan <- err
-				return
-			}
-			if err := clientConn.WriteMessage(messageType, message); err != nil {
-				errChan <- err
-				return
-			}
+		// 升級客戶端連接
+		clientConn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			logger.Error("Failed to upgrade client connection", "error", err)
+			return
 		}
-	}()
+		defer clientConn.Close()
 
-	// 等待錯誤
-	err = <-errChan
-	if err != nil && !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-		logger.Error("WebSocket proxy error", "error", err)
-	}
+		logger.Info("WebSocket connection established", "remote_addr", r.RemoteAddr)
 
-	logger.Info("WebSocket connection closed", "remote_addr", r.RemoteAddr)
+		// 雙向代理
+		errChan := make(chan error, 2)
+
+		// 客戶端 -> 後端
+		go func() {
+			for {
+				messageType, message, err := clientConn.ReadMessage()
+				if err != nil {
+					errChan <- err
+					return
+				}
+				if err := backendConn.WriteMessage(messageType, message); err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}()
+
+		// 後端 -> 客戶端
+		go func() {
+			for {
+				messageType, message, err := backendConn.ReadMessage()
+				if err != nil {
+					errChan <- err
+					return
+				}
+				if err := clientConn.WriteMessage(messageType, message); err != nil {
+					errChan <- err
+					return
+				}
+			}
+		}()
+
+		// 等待錯誤
+		err = <-errChan
+		if err != nil && !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			logger.Error("WebSocket proxy error", "error", err)
+		}
+
+		logger.Info("WebSocket connection closed", "remote_addr", r.RemoteAddr)
 	}
 }
 

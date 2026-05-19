@@ -175,7 +175,7 @@ func handleMQTTMessage(client mqtt.Client, msg mqtt.Message) {
 
 	// 廣播到所有 WebSocket 客戶端
 	broadcast := models.BroadcastMessage{
-		Type:     "status",  // 修改為 "status" 以匹配前端期望
+		Type:     "status", // 修改為 "status" 以匹配前端期望
 		DeviceID: deviceID,
 		Payload:  status,
 	}
@@ -226,12 +226,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
-			}
+	for range ticker.C {
+		if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			return
 		}
 	}
 }

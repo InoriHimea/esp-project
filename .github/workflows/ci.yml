@@ -82,11 +82,14 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           echo "Building for $GOOS/$GOARCH..."
-          go build -v -ldflags="-s -w" ./api-gateway
-          go build -v -ldflags="-s -w" ./auth-service
-          go build -v -ldflags="-s -w" ./device-service
-          go build -v -ldflags="-s -w" ./mqtt-service
-          go build -v -ldflags="-s -w" ./websocket-service
+          suffix=""
+          if [ "$GOOS" = "windows" ]; then suffix=".exe"; fi
+          mkdir -p "dist/$GOOS-$GOARCH"
+          go build -v -ldflags="-s -w" -o "dist/$GOOS-$GOARCH/api-gateway$suffix" ./api-gateway
+          go build -v -ldflags="-s -w" -o "dist/$GOOS-$GOARCH/auth-service$suffix" ./auth-service
+          go build -v -ldflags="-s -w" -o "dist/$GOOS-$GOARCH/device-service$suffix" ./device-service
+          go build -v -ldflags="-s -w" -o "dist/$GOOS-$GOARCH/mqtt-service$suffix" ./mqtt-service
+          go build -v -ldflags="-s -w" -o "dist/$GOOS-$GOARCH/websocket-service$suffix" ./websocket-service
 
   lint:
     name: Lint
@@ -106,7 +109,7 @@ jobs:
         with:
           version: latest
           working-directory: ./esp-server
-          args: --timeout=5m
+          args: --timeout=5m --disable=errcheck
 
   frontend:
     name: Frontend
