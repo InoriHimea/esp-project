@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.4.5-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.5)
+[![Version](https://img.shields.io/badge/version-1.4.6-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.4.6)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26.3-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 
 面向 ESP32 设备的控制平台，包含 Go 微服务后端、React 管理界面、MQTT/WebSocket 实时通道，以及两个 PlatformIO 固件项目：JGB37/DRV8871 马达控制器与电子墨水屏控制器。
 
-**当前版本：v1.4.5**
+**当前版本：v1.4.6**
 
 ## 项目概览
 
