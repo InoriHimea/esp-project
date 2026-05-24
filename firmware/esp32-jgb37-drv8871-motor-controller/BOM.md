@@ -1,61 +1,91 @@
 # BOM — ESP32 JGB37 DRV8871 Motor Controller
 
-This bill of materials covers the ESP32 motor controller firmware/hardware target: ESP32 DevKit + DRV8871 + JGB37-520 24V gear motor, with optional indicators, sensing, and the legacy 3-digit common-anode display circuit.
+This BOM follows the final v3 hardware direction: 4-channel industrial slip ring, upper 800mm tray friction drive, ESP32/DRV8871 in the lower tray or an external control box, one blue LED initially, buzzer, and voltage/current sensing. The legacy 3-digit 7-segment display is no longer part of the purchase plan.
 
-## Core power and motor control
-
-| Item | Status | Component | Recommended model | Specs | Qty | Notes |
-|------|--------|-----------|-------------------|-------|-----|-------|
-| 1 | Required | ESP32 development board | ESP32 DevKit / WROOM-32 | 3.3V logic, WiFi | 1 | Main controller |
-| 2 | Required | H-bridge motor driver | DRV8871 module | 24V input, >=1.5A load | 1 | Drives JGB37 motor through IN1/IN2 PWM |
-| 3 | Required | DC gear motor | JGB37-520 | 24V, ~45 RPM | 1 | Rotation actuator |
-| 4 | Required | DC power supply | Generic adapter | 24V / 2A | 1 | External motor supply |
-| 5 | Required | Buck converter | Mini 560 | 24V to 5V/3A | 1 | Powers ESP32 VIN/5V rail |
-| 6 | Required | Resettable fuse | MF-R050 | 500mA / 30V | 1 | 24V rail protection |
-| 7 | Required | TVS diode | SMBJ24A | 24V bidirectional | 1 | Surge suppression across 24V rail |
-| 8 | Required | Bulk capacitor | Nichicon UPW or equivalent | 1000uF / 35V, 105C preferred | 1 | Motor supply buffering |
-| 9 | Required | Ceramic decoupling capacitor | X7R ceramic | 0.1uF / 100V | 2 | High-frequency decoupling near motor supply |
-| 10 | Required | DC barrel jack | 5.5 x 2.1mm | Panel or PCB mount | 1 | 24V input |
-| 11 | Required | Wire | Red/black copper wire | >=0.75mm² | 1 set | 24V current path |
-| 12 | Required | Heat shrink tubing | 4mm / 8mm | High-temperature preferred | 1 set | Insulation and strain relief |
-| 13 | Required | Dual thermostat coupler | Generic 5-contact coupler | 250V / 10A | 1 | Warm tray integration; keep mains spacing safe |
-| 14 | Required | Mica insulation sheet | Original retained part | Heat-resistant | 1 | Must remain in the warm tray assembly |
-
-## Optional sensing and alerting
+## Core power, slip ring, and motor control
 
 | Item | Status | Component | Recommended model | Specs | Qty | Notes |
 |------|--------|-----------|-------------------|-------|-----|-------|
-| 15 | Optional | Temperature sensor | DS18B20 waterproof probe | -55C to 125C | 1-2 | DRV8871 and ambient temperature monitoring |
-| 16 | Optional | Pull-up resistor | 4.7kΩ 1/4W | For DS18B20 data line | 1 | Required if DS18B20 is installed |
-| 17 | Optional | Passive buzzer | 12mm generic | 3-5V | 1 | Audible fault indication |
-| 18 | Optional | NPN transistor | S8050 | TO-92 | 1 | Buzzer driver |
-| 19 | Optional | Base resistor | 1kΩ 1/4W | For S8050 base | 1 | Buzzer driver input limit |
-| 20 | Optional | Flyback diode | 1N4148 | Small signal diode | 1 | Buzzer transient suppression |
-| 21 | Optional | Hall sensor | AH3144 or equivalent | Digital Hall switch | 1 | Real RPM measurement |
-| 22 | Optional | Status LED resistor | 470Ω | 1/4W | 1 | External LED current limit if used |
+| 1 | Required / acquired | Industrial slip ring | Capsule slip ring | 4-channel, >=5A/channel, >=240V rating | 1 | CH1/CH2 for 220V L/N, CH3/CH4 for motor low-voltage channel |
+| 2 | Required / existing | ESP32 development board | ESP32 DevKit / WROOM-32 | 3.3V logic, WiFi | 1 | Main controller; lower tray or external control box |
+| 3 | Required / existing | H-bridge motor driver | DRV8871 module | 24V input, >=3A peak preferred | 1 | Drives JGB37 through IN1/IN2 PWM |
+| 4 | Required / existing | DC gear motor | JGB37-520 | 24V, ~45 RPM, 6mm shaft | 1 | Fixed on upper 800mm tray, drives friction wheel |
+| 5 | Required / existing | DC power supply | Generic adapter | 24V / 2A | 1 | External motor/control supply |
+| 6 | Required / existing | Buck converter | Mini 560 | 24V to 5V/3A | 1 | Powers ESP32 VIN/5V rail |
+| 7 | Required | DC barrel jack | 5.5 x 2.1mm | Panel or PCB mount | 1 | 24V input to lower tray/control box |
+| 8 | Required | Resettable fuse or fuse holder | MF-R110 or 2A fuse | ~1.1A hold / 2.2A trip, or replaceable 2A | 1 | 500mA hold may trip too easily with friction load |
+| 9 | Required | TVS diode | SMBJ24A | 24V bidirectional | 1 | Surge suppression across protected 24V rail |
+| 10 | Required | Bulk capacitor | Nichicon UPW or equivalent | 1000uF / 35V, 105C | 1 | Near DRV8871 VM/GND |
+| 11 | Required | Ceramic decoupling capacitor | X7R ceramic | 0.1uF / 100V | 2 | 24V high-frequency decoupling |
+| 12 | Required | Wire | Red/black copper wire | >=0.75mm² for power | 1 set | 220V and low voltage must use separate colors/bundles |
+| 13 | Required | Heat shrink tubing | 4mm / 8mm / mixed | High-temperature preferred | 1 set | Insulation and strain relief |
+| 14 | Recommended | Terminal block / connector | KF301 / XT30 / locking connector | Rated for current and voltage | 1 set | Serviceable wiring between control box, slip ring, and motor |
 
-## Legacy 3-digit common-anode display circuit
-
-The firmware still contains `DirectDisplay`, but the hardware design notes say the in-box 7-segment display was ultimately abandoned because it is hard to view in the installation. Treat these parts as optional/deprecated unless the display is intentionally kept.
+## Friction-drive mechanical parts
 
 | Item | Status | Component | Recommended model | Specs | Qty | Notes |
 |------|--------|-----------|-------------------|-------|-----|-------|
-| 23 | Optional / Deprecated | 3-digit 7-segment display | Common-anode module | 5V LED display | 1 | RPM / percent / raw PWM display |
-| 24 | Optional / Deprecated | NPN transistor | S8050 | TO-92 | 3 | Low-side stage for digit high-side driver |
-| 25 | Optional / Deprecated | PNP transistor | 2N5401 | TO-92 | 3 | High-side COM driver |
-| 26 | Optional / Deprecated | GPIO/base resistor | 10kΩ 1/4W | Digit driver input and PNP pull-up | 6 | Three GPIO limit + three PNP pull-up |
-| 27 | Optional / Deprecated | PNP base resistor | 1kΩ 1/4W | S8050 collector to PNP base | 3 | Digit driver |
-| 28 | Optional / Deprecated | Segment resistor | 220Ω 1/4W | Segment current limit | 7 | One per segment a-g |
-| 29 | Optional / Deprecated | Speed-up capacitor | 0.1uF ceramic | Across PNP pull-up | 3 | Reduces ghosting |
-| 30 | Optional / Deprecated | GPIO pulldown resistor | 10kΩ 1/4W | Digit GPIO pulldown | 3 | Startup stability |
-| 31 | Optional / Deprecated | Segment pulldown resistor | 10kΩ 1/4W | Segment GPIO pulldown | 7 | Prevents floating segment pins |
-| 32 | Optional / Deprecated | 5V bulk capacitor | 100uF electrolytic | >=16V | 1 | Display/ESP32 5V rail decoupling |
-| 33 | Optional / Deprecated | 5V ceramic capacitor | 0.1uF ceramic | >=50V | 1 | High-frequency 5V decoupling |
-| 34 | Optional / Deprecated | Driver IC alternative | MIC2981 / UDN2981 | 8-channel high-side driver | 1 | Alternative to discrete high-side digit drivers |
+| M1 | Required | Friction wheel | Rubber / silicone wheel | 20-35mm diameter, 8-15mm width | 1-2 | Choose high-friction, heat-tolerant material |
+| M2 | Required | Motor bracket | JGB37 bracket | Metal bracket | 1 | Fixes motor to underside of 800mm upper tray |
+| M3 | Required | Fasteners | M3/M2 screws, washers | Short screws, spring washers | 1 set | Use threadlocker where vibration exists |
+| M4 | Recommended | Height shims / elastic pad | Silicone pad / spring shim | 0.5-2mm adjustment | 1 set | Sets friction wheel contact pressure |
+| M5 | Recommended | Cable bridge / ramp | TPU / silicone / rubber | 150-180mm long, <=8-10 degree slope | 1+ | Only if cables cannot avoid friction-wheel path |
+| M6 | Recommended | Anti-slip strip | Rubber tape | Heat-tolerant | 1 set | Can be used on ramp surface if printed plastic is too smooth |
+| M7 | Recommended | Mica insulation board | Mica sheet | 0.5-1mm, cuttable, >=500C | 1-2 | Add between hot upper area and motor/bracket/wiring |
 
-## Safety notes
+## Indicator and buzzer
 
-- Keep 220V mains wiring physically separated from 24V/logic wiring by at least 6mm.
-- Use heat-resistant insulation and retain the mica sheet in the warm tray assembly.
-- Verify no shorts with a multimeter before energizing mains or the 24V rail.
-- Select 105C-rated electrolytic capacitors for the warm enclosure.
+| Item | Status | Component | Recommended model | Specs | Qty | Notes |
+|------|--------|-----------|-------------------|-------|-----|-------|
+| I1 | Required | Blue status LED | 5mm or panel LED | Blue, high-brightness | 1 | First-build visible status indicator |
+| I2 | Required | LED resistor | 330Ω | 1/4W | 1 | GPIO2 -> resistor -> blue LED -> GND |
+| I3 | Recommended / reserved | Red LED | 5mm or panel LED | Red | 1 | Fault indicator expansion |
+| I4 | Recommended / reserved | Green LED | 5mm or panel LED | Green | 1 | Normal/network indicator expansion |
+| I5 | Recommended / reserved | Yellow LED | 5mm or panel LED | Yellow | 1 | Warning/config/self-test indicator expansion |
+| I6 | Recommended / reserved | LED resistors | 330Ω or 470Ω | 1/4W | 3 | One per reserved discrete LED |
+| I7 | Optional / reserved | Addressable RGB LED | WS2812B | 5V data LED | 1 | Future single-wire RGB status light |
+| I8 | Optional / reserved | RGB data resistor | 330Ω | 1/4W | 1 | GPIO32 -> DIN |
+| I9 | Optional / reserved | RGB bulk capacitor | Electrolytic | 1000uF / >=6.3V | 1 | Across 5V/GND near WS2812B |
+| I10 | Required | Passive buzzer | 12mm passive buzzer | 3-5V | 1 | Multi-tone alerts via PWM |
+| I11 | Required | NPN transistor | S8050 | TO-92 | 1 | Buzzer low-side driver |
+| I12 | Required | Base resistor | 1kΩ | 1/4W | 1 | ESP32 GPIO to S8050 base |
+| I13 | Recommended | Base pulldown resistor | 100kΩ | 1/4W | 1 | Prevents boot-time false beep |
+| I14 | Recommended | Flyback diode | 1N4148 / 1N4007 | For magnetic buzzer | 1 | Optional for piezo, recommended for magnetic buzzer |
+
+## Voltage and current sensing
+
+| Item | Status | Component | Recommended model | Specs | Qty | Notes |
+|------|--------|-----------|-------------------|-------|-----|-------|
+| S1 | Recommended | Current sensor | INA226 module | >=36V high-side current/voltage sensor, I2C | 1 | Preferred over INA219 for 24V systems |
+| S2 | Optional | I2C pull-up resistor | 4.7kΩ | 1/4W | 2 | Only if INA226 module lacks pull-ups |
+| S3 | Recommended | Voltage divider high resistor | 100kΩ | 1%, 1/4W | 1 | 24V_PROT to ADC node |
+| S4 | Recommended | Voltage divider low resistor | 10kΩ | 1%, 1/4W | 1 | ADC node to GND |
+| S5 | Recommended | ADC series resistor | 1kΩ | 1/4W | 1 | ADC node to GPIO34 |
+| S6 | Recommended | ADC filter capacitor | X7R ceramic | 0.1uF / 50V | 1 | ADC node to GND |
+
+## Future reserved sensors, not first-build purchases
+
+| Item | Status | Component | Recommended model | Specs | Qty | Notes |
+|------|--------|-----------|-------------------|-------|-----|-------|
+| F1 | Future / reserved | Temperature sensor | DS18B20 waterproof probe | -55C to 125C | 1-2 | Add after upgrading to 6+ channel slip ring or external sensor path |
+| F2 | Future / reserved | Temp sensor pull-up | 4.7kΩ | 1/4W | 1 | For DS18B20 data line |
+| F3 | Future / reserved | Humidity sensor | SHT31 / SHT35 module | I2C | 1 | Use only if sensor can be placed away from heater |
+| F4 | Future / reserved | Leak/water sensor | Waterproof probe / leak board | Digital or analog | 1 | Requires safe low-voltage routing |
+| F5 | Not planned now | Hall sensor | AH3144 + magnet | Digital Hall switch | 0 | Not practical for all faces; upper side near heating wire |
+
+## Deprecated / do not purchase for final build
+
+| Component | Reason |
+|-----------|--------|
+| 3-digit 7-segment display | Not visible in final installation; consumes GPIO; had ghosting issue |
+| 2N5401/S8050 digit high-side display driver set | Only needed for deprecated 7-segment display |
+| 220Ω segment resistor x7 | Only needed for deprecated 7-segment display |
+| MIC2981 / UDN2981 display driver | Only needed if retaining deprecated display |
+| Hall RPM measurement kit | Deferred; mechanical placement not suitable now |
+
+## Notes
+
+- Keep 220V wiring physically separated from low-voltage wiring.
+- Use heat-resistant insulation around heater and motor area.
+- Retain the original mica sheet and add mica board near motor/bracket if heat exposure is possible.
+- Use voltage/current sensing for software protection: undervoltage, overcurrent, stall, cable-ramp impact detection.

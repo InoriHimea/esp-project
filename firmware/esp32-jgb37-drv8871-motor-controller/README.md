@@ -1,88 +1,98 @@
-# ESP32 JGB37 DRV8871 馬達控制器韌體
+# ESP32 JGB37 DRV8871 马达控制器固件
 
-基於 PlatformIO 的 ESP32 馬達控制器，支援 WiFi / MQTT / HTTP / WebSocket 多協議控制。
+基于 PlatformIO 的 ESP32 马达控制器，支持 WiFi / MQTT / HTTP / WebSocket 多协议控制。最终硬件方向为 4 路工业滑环、上部 800mm 大盘摩擦驱动、单蓝色 LED、蜂鸣器，以及电压/电流检测预留。
 
-## 🎯 核心功能
+## 当前功能
 
-- **馬達控制**：DRV8871 H 橋 + 1kHz PWM，正反轉、平滑加減速
-- **顯示**：3 位共陽極數碼管，RPM / 占空比 / 原始值三模式自動輪播
-- **狀態指示**：板載 LED 不同閃爍模式對應馬達狀態
-- **WiFi 配網**：首次啟動進入 AP 模式（`ESP32-Motor` / `motorctrl`）
-- **協議支援**：HTTP REST API、WebSocket、MQTT
-- **綜合自檢**：開機自動測試 LED / 數碼管 / 馬達 / GPIO
+- 马达控制：DRV8871 H 桥 + 1kHz PWM，支持正反转、平滑加减速、主动刹车、惰行。
+- 状态指示：GPIO2 蓝色 LED，不同闪烁模式对应马达状态。
+- 配网：首次启动进入 AP 模式（`ESP32-Motor` / `motorctrl`）。
+- 协议：HTTP REST API、WebSocket、MQTT。
+- 自检：支持 LED、马达、GPIO；数码管测试仍在固件遗留代码中，最终硬件不采购、不安装。
 
-## 🔌 硬件接線
+## 最终硬件方向
 
-### ESP32 GPIO 對應表
+- 4 路工业滑环：CH1/CH2 走 220V L/N，CH3/CH4 走电机低压通道。
+- ESP32/DRV8871 优先放下盘；空间不足时放外部控制盒。
+- 电机固定在上部 800mm 大盘，通过挖孔沉降让摩擦轮接触桌面驱动旋转。
+- 如果 ESP32/DRV8871 在下盘或外部控制盒，CH3/CH4 应接 DRV8871 OUT1/OUT2 到上盘电机，不应接固定侧原始 24V+/24V-。
+- 仅安装一路蓝色 LED，预留红/绿/黄/RGB 灯位。
+- 加入无源蜂鸣器，用于开机、自检、断联、堵转、过流等提示。
+- 加入 24V 电压检测和 INA226 电流检测器件到 BOM。
+- 霍尔、温度、湿度、防水检测只预留，等后期换 6 路或更多滑环再加。
+- 3 位数码管已废弃：安装后不可见，且占用 GPIO。
 
-| 功能 | GPIO | 說明 |
-|------|------|------|
-| **馬達控制** | | |
-| DRV8871 IN1 | GPIO18 | LEDC PWM 通道 0 |
-| DRV8871 IN2 | GPIO19 | LEDC PWM 通道 1 |
-| **狀態指示** | | |
-| 板載 LED | GPIO2 | 高電平點亮（外接 470Ω 限流）|
-| **數碼管段選 (a~g)** | | |
-| 段 a | GPIO23 | 220Ω 限流 |
-| 段 b | GPIO25 | 220Ω 限流 |
-| 段 c | GPIO26 | 220Ω 限流 |
-| 段 d | GPIO27 | 220Ω 限流 |
-| 段 e | GPIO32 | 220Ω 限流 |
-| 段 f | GPIO33 | 220Ω 限流 |
-| 段 g | GPIO14 | 220Ω 限流 |
-| **數碼管位選（高邊驅動）** | | |
-| COM1（百位） | GPIO13 | NPN+PNP 達林頓對管 |
-| COM2（十位） | GPIO5  | NPN+PNP 達林頓對管 |
-| COM3（個位） | GPIO4  | NPN+PNP 達林頓對管 |
+## ESP32 GPIO 对应表
 
-### 詳細電路圖
+| 功能 | GPIO | 状态 | 说明 |
+|------|------|------|------|
+| DRV8871 IN1 | GPIO18 | 必需 | LEDC PWM 通道 0 |
+| DRV8871 IN2 | GPIO19 | 必需 | LEDC PWM 通道 1 |
+| 蓝色状态 LED | GPIO2 | 必需 | 高电平点亮 |
+| 蜂鸣器 PWM | GPIO25 | 推荐 | S8050 低边驱动 |
+| 24V 电压 ADC | GPIO34 | 推荐 | 100k/10k 分压后输入 |
+| INA226 SDA | GPIO21 | 推荐 | I2C 电流检测 |
+| INA226 SCL | GPIO22 | 推荐 | I2C 电流检测 |
+| 红色 LED 预留 | GPIO13 | 预留 | 故障灯 |
+| 绿色 LED 预留 | GPIO5 | 预留 | 正常/联网 |
+| 黄色 LED 预留 | GPIO4 | 预留 | 警告/配网/自检 |
+| RGB 数据预留 | GPIO32 | 预留 | WS2812B |
+| 温湿度预留 | GPIO33 | 后期 | 需要更多滑环通道或外置传感器 |
+| 防水/漏水预留 | GPIO35 | 后期 | 只能输入 |
 
-數碼管的位選驅動電路採用 NPN + PNP 達林頓對管實現高邊驅動（5V 推送 COM）。
+避免使用 GPIO12，防止影响 ESP32 启动绑带配置。
 
-⚠️ **重要**：為了消除鬼影/殘影，每個 PNP 三極管的基極上拉電阻（10kΩ）兩端必須並聯一個 **0.1μF 速度補償電容**。
+## 蓝色 LED 状态对照
 
-🛡️ **24V 馬達環境**還需要：
-- **5V 電源去耦**（100μF + 0.1μF 並聯到 GND）
-- **段選/位選下拉電阻**（10kΩ × 10，每個 GPIO 對 GND）
+| 马达状态 | LED 行为 | 含义 |
+|----------|----------|------|
+| STOPPED / COASTING | 灭或低频心跳 | 停止/待机 |
+| RAMPING | 慢闪 | 加减速中 |
+| RUNNING | 常亮 | 运行中 |
+| BRAKING | 快闪 | 主动刹车/堵转/过流 |
+| 配网 / MQTT 未连接 | 慢闪或双闪 | 网络状态提示 |
 
-📐 完整電路圖、原理分析和替代方案請參閱：
-- [**數碼管驅動電路設計**](docs/display-driver-circuit.md)
-  - 詳細電路圖（基礎版 + 抗干擾增強版）
-  - 速度補償電容原理
-  - 5V 電源去耦 + GPIO 下拉電阻
-  - 完整改造步驟（按優先級）
-  - ULN2803 / MIC2981 專用驅動 IC 替代方案
+## 蜂鸣器建议行为
 
-## 🚀 快速開始
+| 场景 | 蜂鸣器模式 |
+|------|------------|
+| 开机 | 短 beep 一次 |
+| 配网成功 | 上升双音 |
+| MQTT 断开 | 每 10s 短 beep，可配置关闭 |
+| 过流/堵转 | 急促三连 beep |
+| 自检完成 | 两短一长 |
+| 严重故障 | 持续间歇报警 |
 
-### 編譯與上傳
+## 快速开始
+
+### 编译与上传
 
 ```bash
-# 編譯
+# 编译
 pio run
 
-# 上傳到 ESP32
+# 上传到 ESP32
 pio run -t upload
 
-# 串口監視
+# 串口监视
 pio device monitor --baud 115200
 ```
 
-### 首次配網
+### 首次配网
 
-1. 上電後，ESP32 啟動 AP 模式
-2. 手機/電腦連接熱點 `ESP32-Motor`，密碼 `motorctrl`
-3. 打開瀏覽器訪問 `http://192.168.4.1`
-4. 填寫 WiFi 帳號密碼、MQTT broker 信息，提交
-5. ESP32 自動重啟並連接 WiFi
+1. 上电后，ESP32 启动 AP 模式。
+2. 手机/电脑连接热点 `ESP32-Motor`，密码 `motorctrl`。
+3. 打开浏览器访问 `http://192.168.4.1`。
+4. 填写 WiFi 账号密码、MQTT broker 信息，提交。
+5. ESP32 自动重启并连接 WiFi。
 
 ### 常用 API
 
 ```bash
-# 獲取狀態
+# 获取状态
 curl http://motorctrl.local/api/status
 
-# 啟動馬達（正轉 80% 速度，1.5 秒平滑加速）
+# 启动马达（正转 80% 速度，1.5 秒平滑加速）
 curl -X POST http://motorctrl.local/api/motor/run \
   -H 'Content-Type: application/json' \
   -d '{"speed":800,"direction":"forward","ramp_ms":1500}'
@@ -90,99 +100,90 @@ curl -X POST http://motorctrl.local/api/motor/run \
 # 停止
 curl -X POST http://motorctrl.local/api/motor/stop
 
-# 主動剎車
+# 主动刹车
 curl -X POST http://motorctrl.local/api/motor/brake
 
-# 觸發完整自檢
+# 触发完整自检
 curl -X POST http://motorctrl.local/api/test \
   -H 'Content-Type: application/json' \
   -d '{"type":"all"}'
 ```
 
-## 🧪 自檢測試系統
+## 自检测试系统
 
-預設**開機自動執行完整自檢**（約 45 秒），可通過以下方式關閉或重新觸發。
+默认开机自动执行完整自检，可通过以下方式关闭或重新触发。
 
-### 測試類型
+| 类型 | 说明 | 状态 |
+|------|------|------|
+| `led` | LED 状态演示 | 当前可用 |
+| `motor` | 马达 PWM 正反转 | 当前可用 |
+| `gpio` | GPIO 直接控制 | 当前可用 |
+| `all` | 综合测试 | 当前可用，仍包含遗留 display 流程 |
+| `display` | 数码管测试 | 遗留代码，最终硬件不安装 |
 
-| 類型 | 說明 | 約耗時 |
-|------|------|--------|
-| `led` | LED 6 種狀態演示 | 16s |
-| `display` | 數碼管 5 階段測試 | 13s |
-| `motor` | 馬達 PWM 正反轉 | 10s |
-| `gpio` | GPIO 直接控制（不用 PWM）| 6s |
-| `all` | 完整綜合測試 | 45s |
-
-### 觸發方式
-
-#### HTTP
+### HTTP
 
 ```bash
-# 啟動測試
+# 启动测试
 POST /api/test
-Body: {"type":"led|display|motor|gpio|all"}
+Body: {"type":"led|motor|gpio|all"}
 
-# 查詢進度
+# 查询进度
 GET /api/test
 Response: {"state":"running","type":"led","step":"...","progress":40}
 
-# 設置開機自檢開關
+# 设置开机自检开关
 POST /api/boot-test
 Body: {"enabled":true|false}
 ```
 
-#### MQTT
+### MQTT
 
-下發到 `esp/devices/{device_id}/command`：
+下发到 `esp/devices/{device_id}/command`：
+
 ```json
 {"cmd":"test", "type":"all"}
-{"cmd":"display_mode"}
 ```
 
-#### WebSocket
+### WebSocket
 
-連接 `ws://motorctrl.local/ws`，發送：
+连接 `ws://motorctrl.local/ws`，发送：
+
 ```json
 {"cmd":"test", "type":"led"}
 ```
 
-## 💡 LED 狀態對照
+## 模块结构
 
-| 馬達狀態 | LED 行為 | 含義 |
-|---------|---------|------|
-| STOPPED / COASTING | 滅 | 停止 |
-| RAMPING | 慢閃 600ms | 加減速中 |
-| RUNNING + FORWARD | 常亮 | 正轉穩定 |
-| RUNNING + REVERSE | 快閃 150ms | 反轉穩定 |
-| BRAKING | 急閃 50ms | 主動剎車 |
-
-## 📚 模塊結構
-
-```
+```text
 firmware/esp32-jgb37-drv8871-motor-controller/
 ├── include/
-│   ├── MotorController.h    # 馬達控制器（DRV8871 + LEDC PWM）
-│   ├── DirectDisplay.h      # 直驅數碼管（FreeRTOS 動態掃描）
-│   └── SelfTest.h           # 綜合自檢系統
+│   ├── MotorController.h    # 马达控制器（DRV8871 + LEDC PWM）
+│   ├── DirectDisplay.h      # 遗留数码管模块，最终硬件不安装
+│   └── SelfTest.h           # 综合自检系统
 ├── src/
 │   ├── main.cpp             # 主程序（WiFi/HTTP/MQTT/WS）
 │   ├── MotorController.cpp
-│   ├── DirectDisplay.cpp
+│   ├── DirectDisplay.cpp    # 遗留数码管模块，待后续固件清理
 │   └── SelfTest.cpp
 ├── docs/
-│   └── display-driver-circuit.md   # 數碼管驅動電路文檔
-├── data/                    # LittleFS 內容（HTML/JS/CSS）
+│   ├── hardware-design.md
+│   └── display-driver-circuit.md   # 遗留数码管参考
+├── data/                    # LittleFS 内容（HTML/JS/CSS）
 ├── BOM.md
 ├── bom.csv
 ├── platformio.ini
 └── README.md
 ```
 
-## 🔗 相關文檔
+## 相关文档
 
-- [BOM 清單](BOM.md)
-- [數碼管驅動電路設計](docs/display-driver-circuit.md)
-- [韌體專案索引](../README.md)
-- [專案根 README](../../README.md)
-- [後端微服務](../../esp-server/README.md)
+- [BOM 清单](BOM.md)
+- [固件侧硬件设计索引](docs/hardware-design.md)
+- [最终硬件设计文档](../../esp32-motor/docs/hardware-design.md)
+- [ESP32 外围电路与绘图说明](../../esp32-motor/docs/esp32-peripheral-circuits.md)
+- [数码管驱动电路设计（遗留参考，不进入采购）](docs/display-driver-circuit.md)
+- [固件项目索引](../README.md)
+- [项目根 README](../../README.md)
+- [后端微服务](../../esp-server/README.md)
 - [前端 UI](../../esp-ui/README.md)

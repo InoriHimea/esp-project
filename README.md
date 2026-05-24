@@ -1,13 +1,13 @@
 # ESP 控制平台
 
-[![Version](https://img.shields.io/badge/version-1.3.2-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.3.2)
+[![Version](https://img.shields.io/badge/version-1.3.3-blue.svg)](https://github.com/InoriHimea/esp-project/releases/tag/v1.3.3)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only-green.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.26.3-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 
 面向 ESP32 设备的控制平台，包含 Go 微服务后端、React 管理界面、MQTT/WebSocket 实时通道，以及两个 PlatformIO 固件项目：JGB37/DRV8871 马达控制器与电子墨水屏控制器。
 
-**当前版本：v1.3.2**
+**当前版本：v1.3.3**
 
 ## 项目概览
 
@@ -45,7 +45,7 @@
 
 | 固件项目 | PlatformIO env | 状态 |
 |----------|----------------|------|
-| `firmware/esp32-jgb37-drv8871-motor-controller` | `esp32dev` | 马达控制器，可控制 DRV8871 + JGB37-520，包含 AP 配网、HTTP API、WebSocket、MQTT、自检系统和三位数码管显示 |
+| `firmware/esp32-jgb37-drv8871-motor-controller` | `esp32dev` | 马达控制器，可控制 DRV8871 + JGB37-520，包含 AP 配网、HTTP API、WebSocket、MQTT、自检系统和 GPIO2 蓝色 LED 状态指示；最终硬件方案已改为单蓝灯 + 蜂鸣器 + 电压/电流检测预留，数码管不再采购 |
 | `firmware/esp32-epaper-display` | `esp32dev-epaper-mono` | 电子墨水屏黑白屏构建，已实现配置、状态、命令和 MQTT/HTTP 协议骨架 |
 | `firmware/esp32-epaper-display` | `esp32dev-epaper-color` | 电子墨水屏彩色/三色屏构建，已实现配置、状态、命令和 MQTT/HTTP 协议骨架 |
 
@@ -323,9 +323,11 @@ pio run -d firmware/esp32-epaper-display -e esp32dev-epaper-color
 ## 硬件与 BOM
 
 - [马达控制器 BOM](firmware/esp32-jgb37-drv8871-motor-controller/BOM.md)
+- [马达控制器硬件设计](esp32-motor/docs/hardware-design.md)
+- [ESP32 外围电路与绘图说明](esp32-motor/docs/esp32-peripheral-circuits.md)
+- [马达控制器固件侧硬件索引](firmware/esp32-jgb37-drv8871-motor-controller/docs/hardware-design.md)
+- [数码管驱动电路与鬼影消除（遗留参考，不进入采购）](firmware/esp32-jgb37-drv8871-motor-controller/docs/display-driver-circuit.md)
 - [电子墨水屏 BOM](firmware/esp32-epaper-display/BOM.md)
-- [数码管驱动电路与鬼影消除](firmware/esp32-jgb37-drv8871-motor-controller/docs/display-driver-circuit.md)
-- [马达控制器硬件设计](firmware/esp32-jgb37-drv8871-motor-controller/docs/hardware-design.md)
 
 ## 已知限制与后续事项
 
