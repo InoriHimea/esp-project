@@ -2,6 +2,12 @@
 
 本文描述最终硬件方案下 ESP32 外围电路。默认布局为：ESP32、DRV8871、电源保护、检测、LED、蜂鸣器位于下盘或外部控制盒；上部 800mm 大盘只放原厂暖菜板、电机和必要线缆。
 
+## 设计图
+
+![暖菜盘 ESP32 电路图 v4](../images/暖菜盘esp32电路图v4.png)
+
+![暖菜盘电气结构图 v4](../images/暖菜盘电气结构图v4.png)
+
 ## 1. 总体方框图
 
 ```text
@@ -226,9 +232,9 @@ Architecture:
 Slip ring channels:
 - CH1: 220V L from fixed side to upper heater L.
 - CH2: 220V N from fixed side to upper heater N.
-- CH3: DRV8871 OUT1 / MOTOR_A to JGB37 motor terminal A.
-- CH4: DRV8871 OUT2 / MOTOR_B to JGB37 motor terminal B.
-- Add a warning note: if ESP32 and DRV8871 are on the fixed side, CH3/CH4 must be motor driver outputs, not raw 24V rails.
+- CH3: fixed-side label must read "CH3 = DRV8871 OUT1 / MOTOR_A"; rotating-side label must read "CH3 = JGB37 Motor A".
+- CH4: fixed-side label must read "CH4 = DRV8871 OUT2 / MOTOR_B"; rotating-side label must read "CH4 = JGB37 Motor B".
+- Add a large boxed warning note: if ESP32 and DRV8871 are on the fixed side, CH3/CH4 must be motor driver outputs, not raw 24V rails.
 
 Power input and protection:
 - 24V DC jack input.
@@ -236,6 +242,7 @@ Power input and protection:
 - TVS diode SMBJ24A from protected 24V to GND.
 - C1 1000uF/35V electrolytic and C2 0.1uF/100V ceramic across protected 24V and GND.
 - Mini560 buck converter from protected 24V to 5V.
+- Label Mini560 direction clearly: +24V_PROT/GND IN -> 5V OUT -> ESP32 5V/VIN and GND.
 - ESP32 DevKit powered from 5V/VIN and GND.
 - All low-voltage grounds common.
 
@@ -274,15 +281,35 @@ Buzzer:
 - S8050 emitter to GND.
 - ESP32 GPIO25 through 1k resistor to S8050 base.
 - Optional 100k base pulldown to GND.
-- Optional flyback diode 1N4148 or 1N4007 across buzzer for magnetic buzzer, cathode to +5V, anode to collector.
+- Optional flyback diode D1 1N4148 or 1N4007 across buzzer for magnetic buzzer; make D1 label and polarity large and explicit: cathode to +5V, anode to S8050 collector. Critical: D1 must cross the buzzer with cathode (+5V) and anode (S8050 collector).
 
 Layout requirements for the drawing:
 - Separate the 220V mains area visually from the low-voltage 24V/5V/3.3V area.
 - Use thick or red lines for 220V L/N and mark them dangerous.
+- Add large readable warnings: "DANGER 220V", "Low-voltage GND must not connect to 220V L/N", and exact uppercase text "LOW-VOLTAGE GND MUST NOT CONNECT TO 220V L/N".
 - Use a dashed boundary for the 4-channel slip ring.
-- Use a dashed boundary for the rotating upper tray and another for the fixed control box.
+- Use a dashed boundary for the rotating upper tray and another for the fixed control box; label them clearly as rotating side and fixed side.
+- Make all labels large enough to read at final PNG size. Key channel names, GPIO numbers, component values, and warning notes must remain legible after export.
+- If GPIO labels become crowded, add a small readable GPIO table beside the ESP32 instead of compressing tiny text.
 - Include notes: keep 220V and low voltage physically separated, use heat shrink on 220V solder joints, retain/add mica insulation near heater and motor, use leakage protection at wall outlet.
 - Do not draw PCB traces or physical placement; draw an electrical schematic with blocks and connections.
+
+Correction checklist before final output:
+- Do not label CH3/CH4 as raw 24V+ and 24V-. In the fixed-controller architecture, label them as DRV8871 OUT1 / MOTOR_A and DRV8871 OUT2 / MOTOR_B.
+- Label CH3/CH4 on both sides of the slip ring with full text: fixed side as "CH3 = DRV8871 OUT1 / MOTOR_A" and "CH4 = DRV8871 OUT2 / MOTOR_B"; rotating side as "CH3 = JGB37 Motor A" and "CH4 = JGB37 Motor B". These full-text labels must be legible at final PNG size — do not abbreviate or compress.
+- Show raw 24V only inside the fixed lower tray or external control box: 24V input -> F1 -> +24V_PROT -> INA226 -> +24V_MOTOR -> DRV8871 VM. Label each node name explicitly: +24V_PROT and +24V_MOTOR must both appear as readable text.
+- Show Mini560 input from +24V_PROT/GND and output to ESP32 5V/VIN and GND, with direction arrows for IN and OUT. The arrow direction must be unambiguous.
+- Show 24V-, Mini560 GND, ESP32 GND, DRV8871 GND, INA226 GND, LED GND and buzzer GND as one low-voltage common GND.
+- Do not connect low-voltage GND to 220V L or N.
+- Draw 220V heater power as an isolated high-voltage path: mains L/N -> slip ring CH1/CH2 -> original heater L/N.
+- Keep the INA226 high-side sensor between +24V_PROT and +24V_MOTOR; do not put INA226 in series with 220V or in the motor OUT1/OUT2 lines. Current flow must pass through INA226 - draw arrows showing path. Label INA226 VIN+ and VIN- explicitly with arrows showing current flow direction.
+- Add explicit, readable labels for F1, SMBJ24A, C1 1000uF/35V/105C, C2 0.1uF/100V, R1 100k, R2 10k, R3 1k, C3 0.1uF, S8050, BZ1, and D1; D1 polarity must be readable: cathode to +5V, anode to S8050 collector. Critical: D1 must cross the buzzer with cathode (+5V) and anode (S8050 collector). All component values must be legible at final PNG size — do not shrink or overlap them.
+- Mark SDA/SCL 4.7k pullups as optional / 可选, not mandatory if already on the INA226 module.
+- Add a large boxed warning: CH3/CH4 are motor driver outputs, not 24V power rails, unless the ESP32 and DRV8871 are moved to the rotating upper tray in a future design.
+- If GPIO labels on the ESP32 block become crowded, draw a separate GPIO reference table beside the ESP32 block listing all used GPIOs with their function; do not compress or overlap GPIO text.
+- The voltage divider node must show all four components with readable values: R1 100k, R2 10k, R3 1k, C3 0.1uF. Label the node voltage equation: Vadc = Vin * 10k / (100k + 10k), 24V -> 2.18V.
+- The 220V area must include a large "DANGER 220V" warning box and notes "Low-voltage GND must not connect to 220V L/N" and "LOW-VOLTAGE GND MUST NOT CONNECT TO 220V L/N". These warnings must not be small or hidden.
+- Before final export, zoom in and verify: CH3/CH4 full-text labels on both slip ring sides, CH3/CH4 warning box, INA226 VIN+/VIN- direction, Mini560 IN/OUT arrows, +24V_PROT and +24V_MOTOR node names, R1/R2/R3/C3 values, D1 polarity, SDA/SCL optional pullup label, GPIO table legibility, DANGER 220V warning, and all safety notes are readable and unambiguous.
 ```
 
 ## 11. 给机械结构图模型的提示词
@@ -296,14 +323,32 @@ Key elements:
 - A JGB37 DC gear motor is mounted to the underside of the upper tray.
 - The upper tray has a cutout/recess hole. A rubber friction wheel attached to the motor shaft protrudes downward through the cutout and contacts the tabletop.
 - The friction wheel drives the upper tray by pushing against the stationary tabletop.
-- A 4-channel industrial slip ring is installed near the center to route 220V L/N for the heater and two low-voltage motor wires.
-- Fixed lower tray or external control box contains ESP32, DRV8871, Mini560 buck converter, protection circuit, blue LED, buzzer, voltage/current sensing.
-- Show a cable bridge/ramp on the tabletop for unavoidable cables: long shallow ramp, cable groove, low angle under 8-10 degrees.
+- A 4-channel industrial slip ring is installed near the center to route 220V L/N for the heater and two low-voltage motor wires; label CH3/CH4 as DRV8871 OUT1/OUT2 motor wires, not raw 24V.
+- Fixed lower tray or external control box contains ESP32, DRV8871, Mini560 buck converter, protection circuit, voltage sensing, current sensing, blue LED, and buzzer; protection circuit and voltage sensing must be separately readable labels.
+- Show a cable bridge/ramp on the tabletop for unavoidable cables: long shallow ramp, cable groove, anti-slip/fixed base, cable clamp / strain relief, and low angle under 8-10 degrees.
 - Show mica insulation sheet between heater/upper hot area and electrical/mechanical parts.
 
 Style:
 - Technical exploded/cross-section diagram, clean labels, no photorealism.
 - Use arrows to show rotation and friction wheel force.
-- Use color coding: red for 220V, blue for 24V/motor, green for signal/control, gray for mechanical parts.
-- Add safety callouts: retain mica sheet, separate 220V and low voltage, fix cables, avoid steep cable ramps.
+- Use strict color coding: red for 220V heater wiring, blue for DRV8871 motor output wires, green for signal/control wiring, gray for mechanical parts.
+- Add a small legend explaining the color coding: red=220V heater, blue=DRV8871 motor output, green=signal/control, gray=mechanical.
+- Make key labels readable at final PNG size: upper rotating tray, fixed control box, slip ring CH1-CH4, DRV8871 OUT1/OUT2, JGB37, friction wheel, cable ramp, mica sheet, and safety warnings.
+- Add safety callouts: retain mica sheet, separate 220V and low voltage, fix cables with cable clamps / strain relief, avoid steep cable ramps.
+
+Correction checklist before final output:
+- Show ESP32, DRV8871, Mini560, protection circuit, voltage sensing, current sensing, LED and buzzer in the fixed lower tray or external control box, not on the rotating upper tray. Each of these must appear as a separately readable label inside the fixed-side boundary — do not merge them into a single unlabeled block.
+- Show only these items on the rotating upper tray: original heater, JGB37 motor, friction wheel, motor bracket, local wiring, mica insulation, and the rotating side of the slip ring.
+- Label slip ring CH1/CH2 as 220V L/N for the heater. These labels must be legible at final PNG size.
+- Label slip ring CH3/CH4 as "CH3 = DRV8871 OUT1 motor wire" and "CH4 = DRV8871 OUT2 motor wire", not raw 24V+/24V-, for this fixed-controller design. Keep the blue motor wires visually continuous from DRV8871, through slip ring CH3/CH4, to the JGB37 motor — the blue line must not break or change color mid-path.
+- Show the JGB37 motor mounted under the upper 800mm tray, with the rubber friction wheel protruding through a cutout/recess hole and pressing on the stationary tabletop.
+- Show the cutout/recess as larger than the wheel, with chamfered/smoothed edges and about 1-2mm static wheel compression. Label the chamfer/smooth edge and the compression distance "~1-2mm" explicitly and legibly.
+- Show the 4-channel slip ring near the center, with separate red 220V wiring and blue motor output wiring; keep them visually separated and do not cross low-voltage control wiring through the 220V area.
+- Show the cable bridge/ramp as long and shallow, with a cable groove, anti-slip/fixed base, cable clamp / strain relief, and slope under 8-10 degrees. Place a large readable "slope <=8-10°" label directly beside the ramp — do not draw a short steep bump. The ramp slope must look visually shallow in the diagram.
+- Show cable clamp / strain relief labels explicitly on the ramp; do not omit them.
+- Draw the color-coding legend as a visible box in the diagram: red=220V heater, blue=DRV8871 motor output, green=signal/control, gray=mechanical. The legend must be present and readable.
+- Optionally show an annular friction-wheel track pad on the tabletop as an alternative to a single cable ramp.
+- Add warning labels for 220V insulation, heat shrink on 220V solder joints, leakage protection at the wall outlet, mica sheet retention, cable fixation, and no PLA/PVC/EVA near hot areas.
+- Show the mica insulation sheet position clearly between the heater/hot area and the electrical/mechanical parts; label it explicitly.
+- Before final export, zoom in and verify: fixed/rotating boundaries, all fixed-box component labels (ESP32, DRV8871, Mini560, protection circuit, voltage sensing, current sensing, LED, buzzer), slip ring CH1/CH2 = 220V L/N labels, slip ring CH3/CH4 full-text labels, blue CH3/CH4 motor-wire continuity, friction wheel cutout with chamfer and 1-2mm compression note, ramp slope <=8-10° label, cable groove and cable clamp labels, color-coding legend box, mica sheet label, and all safety warnings are readable and unambiguous.
 ```

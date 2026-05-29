@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  ESP32 Motor Controller — main.cpp
-//  Version: 1.3.3
+//  Version: 1.3.4
 //
 //  Hardware:  ESP32 + DRV8871 + JGB37-520 + Mini 560 buck converter
 //
@@ -673,7 +673,7 @@ void setup() {
     Serial.begin(115200);
     delay(100);  // 等待串口穩定
     Serial.println("\n\n========================================");
-    Serial.println("[Boot] ESP32 Motor Controller v1.3.3");
+    Serial.println("[Boot] ESP32 Motor Controller v1.3.4");
     Serial.println("========================================");
 
     if (!LittleFS.begin(true)) {
