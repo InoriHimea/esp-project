@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  ESP32 Motor Controller — main.cpp
-//  Version: 1.3.6
+//  Version: 1.3.10
 //
 //  Hardware:  ESP32 + DRV8871 + JGB37-520 + Mini 560 buck converter
 //
@@ -53,6 +53,7 @@ static constexpr uint8_t PIN_LED = 2;
 MotorController motor;
 DirectDisplay   display;         // ← 替换 DisplayManager
 SelfTest        selfTest;        // ← 綜合自檢模塊
+bool            autoStartEnabled = false;
 AsyncWebServer  httpServer(80);
 AsyncWebSocket  ws("/ws");
 Preferences     prefs;
@@ -65,8 +66,10 @@ uint16_t      mqttPort = 1883;
 String        deviceId;
 
 // Status broadcast interval (ms)
-static constexpr uint32_t WS_BROADCAST_INTERVAL  = 100;
-static constexpr uint32_t MQTT_STATUS_INTERVAL   = 500;
+static constexpr uint32_t WS_BROADCAST_INTERVAL       = 100;
+static constexpr uint32_t MQTT_STATUS_INTERVAL        = 500;
+static constexpr uint32_t AUTO_START_DELAY_MS        = 5000;
+static constexpr uint8_t  AUTO_START_SPEED_PERCENT   = 70;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers
@@ -250,109 +253,62 @@ static bool parseRunCommand(const String& body, uint16_t& speed,
     return true;
 }
 
+static void slowStopBeforeRestart(uint32_t wait_ms = 5000) {
+    MotorState s = motor.state();
+    if (s == MotorState::RUNNING || s == MotorState::RAMPING) {
+        Serial.println("[WiFi] provisioning requested; slowing motor before restart");
+        motor.setSpeed(0, motor.direction(), wait_ms);
+        uint32_t start = millis();
+        while ((millis() - start) < wait_ms + 500) {
+            if (motor.state() == MotorState::STOPPED || motor.state() == MotorState::COASTING) break;
+            delay(50);
+        }
+    }
+}
+
 // ─── WiFi config portal HTML (served at GET /) ────────────────────────────────
 static const char WIFI_PORTAL_HTML[] PROGMEM = R"rawhtml(<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Motor Controller — WiFi 配置</title>
-<link rel="stylesheet" href="/style.css">
-<script defer src="/alpine.min.js"></script>
+<style>
+body{margin:0;min-height:100vh;background:#0f172a;color:#e5e7eb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}.card{width:100%;max-width:390px;background:#1e293b;border:1px solid #334155;border-radius:18px;padding:24px;box-shadow:0 18px 50px #0008}.header{display:flex;gap:12px;align-items:center;margin-bottom:24px}.icon{width:40px;height:40px;border-radius:12px;background:#2563eb;display:flex;align-items:center;justify-content:center;font-size:22px}h1{font-size:18px;margin:0}.muted{color:#94a3b8;font-size:13px;margin:4px 0 0}.section{border-top:1px solid #334155;padding-top:16px;margin-top:18px}.label{display:block;color:#cbd5e1;font-size:14px;margin:0 0 6px}input{width:100%;box-sizing:border-box;background:#0f172a;border:1px solid #475569;color:white;border-radius:10px;padding:11px 12px;margin-bottom:14px;font-size:15px}.btn{width:100%;border:0;border-radius:10px;color:white;padding:12px 10px;font-size:15px;font-weight:600;margin-top:8px}.primary{background:#2563eb}.run{background:#059669}.stop{background:#d97706}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.hint{font-size:12px;color:#94a3b8;line-height:1.5}.ok{background:#064e3b;color:#6ee7b7;border:1px solid #047857;border-radius:10px;padding:10px;margin-top:14px}.err{background:#7f1d1d;color:#fca5a5;border:1px solid #b91c1c;border-radius:10px;padding:10px;margin-top:14px}
+</style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-<div x-data="{ssid:'',password:'',show:false,status:'',loading:false,
-  mqtt_broker:'',mqtt_port:1883,device_id:'motor-01',
-  async submit(){
-    this.loading=true; this.status='';
-    try{
-      const r=await fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ssid:this.ssid,password:this.password,
-          mqtt_broker:this.mqtt_broker,mqtt_port:this.mqtt_port,device_id:this.device_id})});
-      this.status=r.ok?'ok':'err';
-    }catch{this.status='err';}
-    this.loading=false;
-  }
-}" class="w-full max-w-sm">
+<body>
+<div class="card">
 
-  <!-- Card -->
-  <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8">
-
-    <!-- Header -->
-    <div class="flex items-center gap-3 mb-8">
-      <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-xl">⚙️</div>
-      <div>
-        <h1 class="text-white font-semibold text-lg leading-tight">Motor Controller</h1>
-        <p class="text-slate-400 text-sm">WiFi 网络配置</p>
-      </div>
-    </div>
-
-    <!-- Form -->
-    <form @submit.prevent="submit" class="space-y-4">
-
-      <div>
-        <label class="block text-slate-300 text-sm font-medium mb-1.5">WiFi 名称 (SSID)</label>
-        <input x-model="ssid" required placeholder="输入网络名称"
-          class="w-full bg-slate-900 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-      </div>
-
-      <div>
-        <label class="block text-slate-300 text-sm font-medium mb-1.5">密码</label>
-        <div class="relative">
-          <input x-model="password" :type="show?'text':'password'" placeholder="留空则为开放网络"
-            class="w-full bg-slate-900 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-          <button type="button" @click="show=!show"
-            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs">
-            <span x-text="show?'隐藏':'显示'"></span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Divider -->
-      <div class="border-t border-slate-700 pt-4">
-        <p class="text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">MQTT 配置</p>
-
-        <div class="space-y-4">
-          <div>
-            <label class="block text-slate-300 text-sm font-medium mb-1.5">Broker 地址</label>
-            <input x-model="mqtt_broker" type="text" placeholder="192.168.1.50"
-              class="w-full bg-slate-900 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-          </div>
-
-          <div>
-            <label class="block text-slate-300 text-sm font-medium mb-1.5">端口</label>
-            <input x-model.number="mqtt_port" type="number" min="1" max="65535"
-              class="w-full bg-slate-900 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-          </div>
-
-          <div>
-            <label class="block text-slate-300 text-sm font-medium mb-1.5">设备 ID</label>
-            <input x-model="device_id" type="text" placeholder="motor-01"
-              class="w-full bg-slate-900 border border-slate-600 text-white placeholder-slate-500 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-          </div>
-        </div>
-      </div>
-
-      <button type="submit" :disabled="loading"
-        class="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg py-2.5 text-sm transition flex items-center justify-center gap-2 mt-2">
-        <svg x-show="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-        </svg>
-        <span x-text="loading?'保存中…':'保存并重启'"></span>
-      </button>
-    </form>
-
-    <!-- Status -->
-    <div x-show="status==='ok'" x-transition
-      class="mt-4 flex items-center gap-2 bg-green-900/40 border border-green-700 text-green-300 rounded-lg px-4 py-3 text-sm">
-      <span>✓</span><span>已保存，设备重启中，请重新连接网络…</span>
-    </div>
-    <div x-show="status==='err'" x-transition
-      class="mt-4 flex items-center gap-2 bg-red-900/40 border border-red-700 text-red-300 rounded-lg px-4 py-3 text-sm">
-      <span>✕</span><span>保存失败，请重试</span>
-    </div>
-
+  <div class="header">
+    <div class="icon">⚙️</div>
+    <div><h1>Motor Controller</h1><p class="muted">WiFi 网络配置 / 电机测试</p></div>
   </div>
+
+  <form method="POST" action="/api/wifi-form">
+    <label class="label">WiFi 名称 (SSID)</label>
+    <input name="ssid" required placeholder="输入网络名称">
+    <label class="label">密码</label>
+    <input name="password" type="password" placeholder="留空则为开放网络">
+    <div class="section">
+      <p class="hint">MQTT 配置（可选）</p>
+      <label class="label">Broker 地址</label>
+      <input name="mqtt_broker" placeholder="192.168.1.50">
+      <label class="label">端口</label>
+      <input name="mqtt_port" type="number" min="1" max="65535" value="1883">
+      <label class="label">设备 ID</label>
+      <input name="device_id" value="motor-01">
+    </div>
+    <button class="btn primary" type="submit">保存并重启</button>
+  </form>
+
+  <div class="section">
+    <p class="hint">电机测试控制：手机可直接点击，不依赖 JavaScript。</p>
+    <div class="grid">
+      <form method="POST" action="/api/motor/run70"><button class="btn run" type="submit">启动 70%</button></form>
+      <form method="POST" action="/api/motor/slow-stop"><button class="btn stop" type="submit">缓慢停止</button></form>
+    </div>
+  </div>
+
 </div>
 </body></html>)rawhtml";
 
@@ -417,12 +373,33 @@ static void setupRoutes() {
         }
     );
 
+    // POST /api/motor/run70 — form-friendly phone test button
+    httpServer.on("/api/motor/run70", HTTP_POST, [](AsyncWebServerRequest* req) {
+        uint16_t targetSpeed = (motor.config().max_speed * AUTO_START_SPEED_PERCENT) / 100;
+        motor.setSpeed(targetSpeed, MotorDirection::FORWARD, 8000);
+        req->send(200, "text/html; charset=utf-8",
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<body style='background:#0f172a;color:#e5e7eb;font-family:sans-serif;padding:24px'>"
+            "<h2>电机已启动</h2><p>正向缓慢加速到 70%。</p>"
+            "<p><a style='color:#38bdf8' href='/'>返回控制页</a></p></body>");
+    });
+
     // POST /api/motor/stop
     httpServer.on("/api/motor/stop", HTTP_POST, [](AsyncWebServerRequest* req) {
         motor.stop();
         auto* res = req->beginResponse(200, "application/json", buildStatusJson());
         addCors(res);
         req->send(res);
+    });
+
+    // POST /api/motor/slow-stop — form-friendly phone stop button
+    httpServer.on("/api/motor/slow-stop", HTTP_POST, [](AsyncWebServerRequest* req) {
+        motor.stop();
+        req->send(200, "text/html; charset=utf-8",
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<body style='background:#0f172a;color:#e5e7eb;font-family:sans-serif;padding:24px'>"
+            "<h2>电机正在缓慢停止</h2><p>已发送减速停止指令。</p>"
+            "<p><a style='color:#38bdf8' href='/'>返回控制页</a></p></body>");
     });
 
     // POST /api/motor/brake
@@ -615,10 +592,47 @@ static void setupRoutes() {
             prefs.end();
 
             req->send(200, "application/json", "{\"ok\":true,\"rebooting\":true}");
+            slowStopBeforeRestart();
             delay(300);
             ESP.restart();
         }
     );
+
+    // POST /api/wifi-form — HTML form fallback for phones without JavaScript
+    httpServer.on("/api/wifi-form", HTTP_POST, [](AsyncWebServerRequest* req) {
+        if (!req->hasParam("ssid", true)) {
+            req->send(400, "text/html; charset=utf-8", "<h2>缺少 SSID</h2><p><a href='/'>返回</a></p>");
+            return;
+        }
+
+        String ssid = req->getParam("ssid", true)->value();
+        String password = req->hasParam("password", true) ? req->getParam("password", true)->value() : "";
+        String mqttBrokerForm = req->hasParam("mqtt_broker", true) ? req->getParam("mqtt_broker", true)->value() : "";
+        uint32_t mqttPortForm = req->hasParam("mqtt_port", true) ? req->getParam("mqtt_port", true)->value().toInt() : 1883;
+        String deviceIdForm = req->hasParam("device_id", true) ? req->getParam("device_id", true)->value() : "motor-01";
+        if (mqttPortForm == 0) mqttPortForm = 1883;
+        if (deviceIdForm.isEmpty()) deviceIdForm = "motor-01";
+
+        prefs.begin("wifi", false);
+        prefs.putString("ssid", ssid);
+        prefs.putString("password", password);
+        prefs.end();
+
+        prefs.begin("mqtt", false);
+        prefs.putString("mqtt_broker", mqttBrokerForm);
+        prefs.putUInt("mqtt_port", mqttPortForm);
+        prefs.putString("device_id", deviceIdForm);
+        prefs.end();
+
+        req->send(200, "text/html; charset=utf-8",
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<body style='background:#0f172a;color:#e5e7eb;font-family:sans-serif;padding:24px'>"
+            "<h2>已保存 WiFi</h2><p>如果电机正在旋转，设备会先缓慢停止，然后重启。</p>"
+            "<p>请稍后连接到家庭 WiFi 或重新搜索设备。</p></body>");
+        slowStopBeforeRestart();
+        delay(300);
+        ESP.restart();
+    });
 
     // 404
     httpServer.onNotFound([](AsyncWebServerRequest* req) {
@@ -673,7 +687,7 @@ void setup() {
     Serial.begin(115200);
     delay(100);  // 等待串口穩定
     Serial.println("\n\n========================================");
-    Serial.println("[Boot] ESP32 Motor Controller v1.3.6");
+    Serial.println("[Boot] ESP32 Motor Controller v1.3.10");
     Serial.println("========================================");
 
     if (!LittleFS.begin(true)) {
@@ -718,6 +732,7 @@ void setup() {
     String wifiSsid = prefs.getString("ssid", "");
     String wifiPass = prefs.getString("password", "");
     prefs.end();
+    autoStartEnabled = (wifiSsid.length() == 0);
 
     WiFi.setHostname(HOSTNAME);
     if (wifiSsid.length() > 0) {
@@ -754,6 +769,9 @@ void setup() {
     setupRoutes();
     httpServer.begin();
     Serial.println("[HTTP] server started on port 80");
+    Serial.println(autoStartEnabled
+        ? "[Boot] Auto-start armed: 5s after self-test completes, forward to 70%"
+        : "[Boot] Auto-start disabled: WiFi credentials already provisioned");
 
     // ── 開機自檢（可選，由 NVS 配置控制）──────────────────────────────────────
     if (boot_self_test) {
@@ -767,18 +785,41 @@ void setup() {
 }
 
 void loop() {
-    static uint32_t lastBroadcast   = 0;
-    static uint32_t lastDisplayTick = 0;   // ← 新增
-    static uint32_t lastMqttStatus  = 0;
-    static uint32_t lastLedTick     = 0;   // 上次 LED 切換的時間戳
-    static bool     ledState        = false; // 當前 LED 輸出狀態
+    static uint32_t lastBroadcast       = 0;
+    static uint32_t lastDisplayTick     = 0;   // ← 新增
+    static uint32_t lastMqttStatus      = 0;
+    static uint32_t lastLedTick         = 0;   // 上次 LED 切換的時間戳
+    static bool     ledState            = false; // 當前 LED 輸出狀態
+    static bool     autoStartCountdown  = false;
+    static bool     autoStartDone       = false;
+    static uint32_t autoStartReadyAt    = 0;
     uint32_t now = millis();
 
     // ── LED 指示燈 ────────────────────────────────────────────────────────────
     // 注意：自檢測試運行時，由 SelfTest 任務直接控制 LED，loop 不干擾
     uint32_t blinkPeriod = 0;   // 0 = 不閃爍（由各 case 直接控制輸出）
 
-    if (selfTest.isRunning()) {
+    bool selfTestRunning = selfTest.isRunning();
+    if (autoStartEnabled) {
+        if (!autoStartDone && selfTestRunning) {
+            autoStartCountdown = false;
+        } else if (!autoStartDone && !autoStartCountdown) {
+            autoStartCountdown = true;
+            autoStartReadyAt   = now + AUTO_START_DELAY_MS;
+            Serial.printf("[Boot] Self-test complete; auto-start in %ums\n", AUTO_START_DELAY_MS);
+        }
+
+        if (!autoStartDone && autoStartCountdown && !selfTestRunning &&
+            (int32_t)(now - autoStartReadyAt) >= 0) {
+            uint16_t targetSpeed = (motor.config().max_speed * AUTO_START_SPEED_PERCENT) / 100;
+            motor.setSpeed(targetSpeed, MotorDirection::FORWARD, motor.config().default_ramp_ms);
+            autoStartDone = true;
+            Serial.printf("[Boot] Auto-start forward speed=%u (%u%%)\n",
+                          targetSpeed, AUTO_START_SPEED_PERCENT);
+        }
+    }
+
+    if (selfTestRunning) {
         // 測試進行中，跳過 LED 狀態更新（測試任務會控制 LED）
         goto skip_led_update;
     }
